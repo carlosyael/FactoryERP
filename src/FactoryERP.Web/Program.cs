@@ -71,8 +71,8 @@ app.MapGet("/health", async (AppDbContext db) =>
 {
     bool dbOk = await db.Database.CanConnectAsync();
     return dbOk
-        ? Results.Ok(new { status = "healthy", service = "FactoryERP", database = "connected", timestamp = DateTime.UtcNow })
-        : Results.Json(new { status = "unhealthy", service = "FactoryERP", database = "disconnected" }, statusCode: 503);
+        ? Results.Ok(new { status = "healthy", platform = "Génesis", service = "FactoryERP", database = "connected", timestamp = DateTime.UtcNow })
+        : Results.Json(new { status = "unhealthy", platform = "Génesis", service = "FactoryERP", database = "disconnected" }, statusCode: 503);
 }).AllowAnonymous();
 
 app.MapPost("/login", async (

@@ -1,6 +1,6 @@
-# FactoryERP — ERP de Manufactura y Gestión Comercial Capilar
+# Génesis — FactoryERP (Manufactura y Gestión Comercial Capilar)
 
-Plataforma ERP construida en **.NET 9 (Blazor Server + Clean Architecture + EF Core 9)** para fabricantes de productos capilares en República Dominicana (**RD$**, **ITBIS 18%**), con identidad **100% configurable (White-Label)** y lista para desplegar en **Microsoft Azure**.
+**FactoryERP** forma parte del ecosistema **Génesis**, una plataforma ERP construida en **.NET 9 (Blazor Server + Clean Architecture + EF Core 9)** para fabricantes de productos capilares en República Dominicana (**RD$**, **ITBIS 18%**), con identidad **100% configurable (White-Label)** y lista para desplegar en **Microsoft Azure**.
 
 ## Módulos Incluidos (v1.0)
 - **Configuración White-Label (`/settings`):** Nombre del comercio, slogan, logo, color de marca, datos de contacto, WhatsApp, parámetros de merma, ITBIS 18% y estado de catálogo público.

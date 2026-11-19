@@ -96,7 +96,7 @@ public static class DbInitializer
         var defaults = new List<SystemSetting>
         {
             new() { Key = SettingKeys.BusinessName, Value = "FactoryERP", DefaultValue = "FactoryERP", Category = "Comercio", DataType = SettingDataType.Text, Description = "Nombre comercial visible en el ERP, catálogo público y comprobantes." },
-            new() { Key = SettingKeys.BusinessTagline, Value = "Manufactura y Cuidado Capilar", DefaultValue = "Manufactura y Cuidado Capilar", Category = "Comercio", DataType = SettingDataType.Text, Description = "Slogan o subtítulo del comercio." },
+            new() { Key = SettingKeys.BusinessTagline, Value = "Génesis · Manufactura y Gestión Capilar", DefaultValue = "Génesis · Manufactura y Gestión Capilar", Category = "Comercio", DataType = SettingDataType.Text, Description = "Slogan o subtítulo del comercio." },
             new() { Key = SettingKeys.BusinessRnc, Value = "", DefaultValue = "", Category = "Comercio", DataType = SettingDataType.Text, Description = "RNC o registro fiscal del comercio." },
             new() { Key = SettingKeys.BusinessPhone, Value = "", DefaultValue = "", Category = "Comercio", DataType = SettingDataType.Text, Description = "Teléfono principal del comercio." },
             new() { Key = SettingKeys.BusinessWhatsApp, Value = "", DefaultValue = "", Category = "Comercio", DataType = SettingDataType.Text, Description = "Número de WhatsApp (con código país, ej. 18095551234) para pedidos del catálogo público." },

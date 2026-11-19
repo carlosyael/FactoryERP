@@ -1,6 +1,6 @@
-# Guía de Despliegue en Microsoft Azure — FactoryERP
+# Guía de Despliegue en Microsoft Azure — Génesis (FactoryERP)
 
-Esta guía prepara el despliegue público de **FactoryERP** en **Azure App Service for Containers (Linux)** + **Azure SQL Database**, quedando accesible vía **HTTPS** desde cualquier red para operadores del ERP y para clientes que visiten el catálogo público (`/catalogo`).
+Esta guía prepara el despliegue público de **Génesis / FactoryERP** en **Azure App Service for Containers (Linux)** + **Azure SQL Database**, quedando accesible vía **HTTPS** desde cualquier red para operadores del ERP y para clientes que visiten el catálogo público (`/catalogo`).
 
 ---
 

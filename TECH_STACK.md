@@ -1,6 +1,6 @@
-# FactoryERP — Especificación Técnica del Stack Tecnológico
+# Génesis (FactoryERP) — Especificación Técnica del Stack Tecnológico
 
-| Capa | Tecnología | Uso en FactoryERP |
+| Capa | Tecnología | Uso en Génesis / FactoryERP |
 | :--- | :--- | :--- |
 | **Runtime & Lenguaje** | `.NET 9.0` / `C# 13` | Backend, lógica de dominio y servidor Kestrel |
 | **Arquitectura** | Clean Architecture (4 proyectos) | `Core` → `Infrastructure` → `Web` + `Tests` |

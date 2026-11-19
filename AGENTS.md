@@ -1,4 +1,4 @@
-# Guía Maestra y Directrices de Operación para Agentes de IA — FactoryERP
+# Guía Maestra y Directrices de Operación para Agentes de IA — Génesis (FactoryERP)
 
 > [!IMPORTANT]
 > **REGLA DE LECTURA OBLIGATORIA AL INICIAR**:

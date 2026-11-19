@@ -1,6 +1,7 @@
-# Product Requirements Document (PRD) — FactoryERP
+# Product Requirements Document (PRD) — Génesis / FactoryERP
 
-> **Producto:** FactoryERP (Sistema Integral de Manufactura y Gestión Comercial Capilar)
+> **Ecosistema / Plataforma:** Génesis
+> **Módulo / Repositorio:** FactoryERP (Sistema Integral de Manufactura y Gestión Comercial Capilar)
 > **Versión:** 1.0
 > **Moneda e Impuestos:** Pesos Dominicanos (`RD$`) / ITBIS `18%`
 > **Facturación Electrónica (DGII e-CF):** Preparada por interfaz extensible (`Pendiente de implementación`)

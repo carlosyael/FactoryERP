@@ -1,7 +1,7 @@
-# FactoryERP — Arquitectura, Modularidad y Guía de Desarrollo
+# Génesis (FactoryERP) — Arquitectura, Modularidad y Guía de Desarrollo
 
 ## 1. Introducción y Propósito del Proyecto
-**FactoryERP** es una plataforma ERP white-label diseñada para fabricantes de productos capilares, optimizada para operar en República Dominicana (**RD$**, **ITBIS 18%**) y preparada para desplegar en **Microsoft Azure**:
+**FactoryERP** (vertical de manufactura del ecosistema **Génesis**) es una plataforma ERP white-label diseñada para fabricantes de productos capilares, optimizada para operar en República Dominicana (**RD$**, **ITBIS 18%**) y preparada para desplegar en **Microsoft Azure**:
 - **Preparación y Fabricación:** Materias primas e insumos, fórmulas versionadas, simulación de materiales/costos, margen de pérdida estándar/esperado, cantidad resultante real, merma normal vs. anormal (NIC 2) y trazabilidad de lotes (`FinishedBatch`).
 - **Compras y Suplidores:** Recepción con ITBIS 18%, Costo Promedio Ponderado (CPP) y cuentas por pagar.
 - **Catálogo Interno y Público:** Control interno de costos/márgenes/precios por segmento y vitrina pública compartible (`/catalogo`) con pedidos por WhatsApp.

@@ -20,7 +20,7 @@ public sealed class BusinessProfileService : IBusinessProfileService
     {
         return new BusinessProfileDto(
             BusinessName: await _settings.GetValueAsync(SettingKeys.BusinessName, "FactoryERP"),
-            Tagline: await _settings.GetValueAsync(SettingKeys.BusinessTagline, "Manufactura y Cuidado Capilar"),
+            Tagline: await _settings.GetValueAsync(SettingKeys.BusinessTagline, "Génesis · Manufactura y Gestión Capilar"),
             Rnc: await _settings.GetValueAsync(SettingKeys.BusinessRnc, string.Empty),
             Phone: await _settings.GetValueAsync(SettingKeys.BusinessPhone, string.Empty),
             WhatsAppNumber: await _settings.GetValueAsync(SettingKeys.BusinessWhatsApp, string.Empty),

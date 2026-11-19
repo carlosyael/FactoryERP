@@ -35,4 +35,10 @@
   - `dotnet test FactoryERP.sln --configuration Release --no-build`: **86 / 86 pruebas aprobadas** (incluyendo flujo completo E2E manufactura + contabilidad, concurrencia, FEFO centavo exacto, EP/BVA, `DbInitializer`, `AppMenuService` y `AuditInterceptor`).
   - Smoke test aislado (`http://127.0.0.1:5219`): `/health`, `/catalogo`, `/login` y `/formulas` autenticados en `200 OK` verificando `FactoryERP` y `v1.0` sin `v@f.Version`, `bi-flask` ni `bi-scale`.
 
+## [2026-11-19] — Adopción de la Marca Madre del Ecosistema: **Génesis**
+- **Requerimiento:** Nombrar formalmente el ecosistema de sistemas ERP como **Génesis**, integrando la identidad en `FactoryERP` sin alterar el nombre white-label configurable por comercio (`/settings`).
+- **Cambios:** Actualizados `<PageTitle>` (`MainLayout.razor`, `EmptyLayout.razor`), pie de acceso en `Login.razor` (`Powered by Génesis`), `/health` (`platform: "Génesis"`), subtítulo por defecto en `DbInitializer`/`BusinessProfileService`, y documentación (`README.md`, `PRD.md`, `TECH_STACK.md`, `AGENTS.md`, `docs/ARCHITECTURE_AND_MODULARITY.md`, `docs/AZURE_DEPLOYMENT.md`).
+- **Verificación:** `dotnet build --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`) y `dotnet test --configuration Release` (`86/86` pruebas aprobadas).
+
+
 
