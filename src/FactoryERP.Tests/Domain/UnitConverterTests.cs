@@ -28,4 +28,26 @@ public class UnitConverterTests
         Action act = () => UnitConverter.Convert(10m, from, to);
         act.Should().Throw<InvalidOperationException>();
     }
+
+    [Theory]
+    [InlineData(UnitOfMeasure.Gram, UnitOfMeasure.Kilogram, true)]
+    [InlineData(UnitOfMeasure.Milliliter, UnitOfMeasure.Liter, true)]
+    [InlineData(UnitOfMeasure.Unit, UnitOfMeasure.Unit, true)]
+    [InlineData(UnitOfMeasure.Gram, UnitOfMeasure.Liter, false)]
+    [InlineData(UnitOfMeasure.Unit, UnitOfMeasure.Gram, false)]
+    public void AreCompatible_EvaluatesDimensionMatch(UnitOfMeasure from, UnitOfMeasure to, bool expected)
+    {
+        UnitConverter.AreCompatible(from, to).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(UnitOfMeasure.Gram, "g")]
+    [InlineData(UnitOfMeasure.Kilogram, "kg")]
+    [InlineData(UnitOfMeasure.Milliliter, "ml")]
+    [InlineData(UnitOfMeasure.Liter, "L")]
+    [InlineData(UnitOfMeasure.Unit, "ud")]
+    public void GetShortLabel_ReturnsCanonicalAbbreviation(UnitOfMeasure unit, string expectedLabel)
+    {
+        UnitConverter.GetShortLabel(unit).Should().Be(expectedLabel);
+    }
 }

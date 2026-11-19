@@ -43,4 +43,28 @@ public class CustomerServiceTests
         entries[0].Lines.Should().Contain(l => l.Account!.Code == AccountCodes.Bank && l.Debit == 1500m);
         entries[0].Lines.Should().Contain(l => l.Account!.Code == AccountCodes.AccountsReceivable && l.Credit == 1500m);
     }
+
+    [Fact]
+    public async Task CreateAndRegisterPayment_ValidatesEmptyNameAndInvalidPaymentBoundaries()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        var chart = new ChartOfAccountsService(factory);
+        await chart.SeedStandardChartAsync();
+        var accounting = new ManufacturingAccountingService(factory);
+        var service = new CustomerService(factory, accounting);
+
+        Func<Task> emptyName = () => service.CreateAsync(new Customer { Name = "  ", RncCedula = "000" });
+        await emptyName.Should().ThrowAsync<ArgumentException>();
+
+        var c = await service.CreateAsync(new Customer { Name = "Cliente BVA", RncCedula = "101000", CurrentBalance = 500m });
+        Func<Task> zeroPay = () => service.RegisterPaymentAsync(c.Id, 0m, PaymentMethod.Cash, "C-0");
+        await zeroPay.Should().ThrowAsync<ArgumentException>();
+
+        Func<Task> creditPay = () => service.RegisterPaymentAsync(c.Id, 100m, PaymentMethod.Credit, "C-C");
+        await creditPay.Should().ThrowAsync<InvalidOperationException>();
+
+        await service.RegisterPaymentAsync(c.Id, 500m, PaymentMethod.Cash, "C-FULL");
+        (await service.GetByIdAsync(c.Id))!.CurrentBalance.Should().Be(0m);
+        (await service.GetPaymentsAsync(c.Id)).Should().ContainSingle();
+    }
 }

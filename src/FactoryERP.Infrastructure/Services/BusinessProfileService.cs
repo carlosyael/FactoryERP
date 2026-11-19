@@ -19,7 +19,7 @@ public sealed class BusinessProfileService : IBusinessProfileService
     public async Task<BusinessProfileDto> GetProfileAsync()
     {
         return new BusinessProfileDto(
-            BusinessName: await _settings.GetValueAsync(SettingKeys.BusinessName, "Mi Fábrica Capilar"),
+            BusinessName: await _settings.GetValueAsync(SettingKeys.BusinessName, "FactoryERP"),
             Tagline: await _settings.GetValueAsync(SettingKeys.BusinessTagline, "Manufactura y Cuidado Capilar"),
             Rnc: await _settings.GetValueAsync(SettingKeys.BusinessRnc, string.Empty),
             Phone: await _settings.GetValueAsync(SettingKeys.BusinessPhone, string.Empty),

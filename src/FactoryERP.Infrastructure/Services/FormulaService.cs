@@ -51,13 +51,8 @@ public sealed class FormulaService : IFormulaService
 
     public async Task<ProductFormula> CreateAsync(ProductFormula formula)
     {
-        if (formula.Items == null || formula.Items.Count == 0)
-            throw new InvalidOperationException("La fórmula debe contener al menos una materia prima.");
-        if (formula.BaseYieldQuantity <= 0)
-            throw new ArgumentException("El rendimiento base debe ser mayor a cero.");
-
         await using var context = await _contextFactory.CreateDbContextAsync();
-        await ValidateItemsCompatibilityAsync(context, formula.Items);
+        await ValidateFormulaAsync(context, formula);
 
         formula.Name = formula.Name.Trim();
         formula.Version = formula.Version.Trim();
@@ -68,16 +63,13 @@ public sealed class FormulaService : IFormulaService
 
     public async Task UpdateAsync(ProductFormula formula)
     {
-        if (formula.Items == null || formula.Items.Count == 0)
-            throw new InvalidOperationException("La fórmula debe contener al menos una materia prima.");
-
         await using var context = await _contextFactory.CreateDbContextAsync();
         var existing = await context.ProductFormulas
             .Include(f => f.Items)
             .FirstOrDefaultAsync(f => f.Id == formula.Id)
             ?? throw new InvalidOperationException("Fórmula no encontrada.");
 
-        await ValidateItemsCompatibilityAsync(context, formula.Items);
+        await ValidateFormulaAsync(context, formula);
 
         existing.ProductId = formula.ProductId;
         existing.Name = formula.Name.Trim();
@@ -115,19 +107,32 @@ public sealed class FormulaService : IFormulaService
         return Math.Round(total, 2, MidpointRounding.AwayFromZero);
     }
 
-    private static async Task ValidateItemsCompatibilityAsync(AppDbContext context, IEnumerable<FormulaItem> items)
+    private static async Task ValidateFormulaAsync(AppDbContext context, ProductFormula formula)
     {
-        var ids = items.Select(i => i.RawMaterialId).Distinct().ToList();
+        if (string.IsNullOrWhiteSpace(formula.Name))
+            throw new ArgumentException("El nombre de la fórmula es obligatorio.");
+        if (formula.BaseYieldQuantity <= 0)
+            throw new ArgumentException("El rendimiento base debe ser mayor a cero.");
+        if (formula.StandardLossMarginPercent < 0m || formula.StandardLossMarginPercent >= 100m)
+            throw new ArgumentException("El margen de pérdida debe estar entre 0% y 99.99%.");
+        if (formula.OverheadCostPerBatch < 0m)
+            throw new ArgumentException("El costo indirecto por lote no puede ser negativo.");
+        if (formula.Items == null || formula.Items.Count == 0)
+            throw new InvalidOperationException("La fórmula debe contener al menos una materia prima.");
+        if (!await context.Products.AnyAsync(p => p.Id == formula.ProductId))
+            throw new InvalidOperationException("Producto terminado no encontrado.");
+        if (formula.Items.GroupBy(i => i.RawMaterialId).Any(g => g.Count() > 1))
+            throw new InvalidOperationException("La fórmula no debe repetir la misma materia prima.");
+
+        var ids = formula.Items.Select(i => i.RawMaterialId).Distinct().ToList();
         var materials = await context.RawMaterials.Where(m => ids.Contains(m.Id)).ToDictionaryAsync(m => m.Id);
 
-        foreach (var item in items)
+        foreach (var item in formula.Items)
         {
             if (item.QuantityRequired <= 0m)
                 throw new ArgumentException("La cantidad requerida de cada material debe ser mayor a cero.");
-
             if (!materials.TryGetValue(item.RawMaterialId, out var mat))
                 throw new InvalidOperationException($"Materia prima ID {item.RawMaterialId} no encontrada.");
-
             if (!UnitConverter.AreCompatible(item.UnitOfMeasure, mat.UnitOfMeasure))
                 throw new InvalidOperationException(
                     $"La unidad {item.UnitOfMeasure} es incompatible con '{mat.Name}' ({mat.UnitOfMeasure}).");

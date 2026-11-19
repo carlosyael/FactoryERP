@@ -95,7 +95,7 @@ public static class DbInitializer
     {
         var defaults = new List<SystemSetting>
         {
-            new() { Key = SettingKeys.BusinessName, Value = "Mi Fábrica Capilar", DefaultValue = "Mi Fábrica Capilar", Category = "Comercio", DataType = SettingDataType.Text, Description = "Nombre comercial visible en el ERP, catálogo público y comprobantes." },
+            new() { Key = SettingKeys.BusinessName, Value = "FactoryERP", DefaultValue = "FactoryERP", Category = "Comercio", DataType = SettingDataType.Text, Description = "Nombre comercial visible en el ERP, catálogo público y comprobantes." },
             new() { Key = SettingKeys.BusinessTagline, Value = "Manufactura y Cuidado Capilar", DefaultValue = "Manufactura y Cuidado Capilar", Category = "Comercio", DataType = SettingDataType.Text, Description = "Slogan o subtítulo del comercio." },
             new() { Key = SettingKeys.BusinessRnc, Value = "", DefaultValue = "", Category = "Comercio", DataType = SettingDataType.Text, Description = "RNC o registro fiscal del comercio." },
             new() { Key = SettingKeys.BusinessPhone, Value = "", DefaultValue = "", Category = "Comercio", DataType = SettingDataType.Text, Description = "Teléfono principal del comercio." },
@@ -114,8 +114,16 @@ public static class DbInitializer
             new() { Key = SettingKeys.CatalogWelcomeMessage, Value = "Explora nuestra línea profesional de cuidado capilar.", DefaultValue = "Explora nuestra línea profesional de cuidado capilar.", Category = "Catálogo", DataType = SettingDataType.TextArea, Description = "Mensaje de bienvenida mostrado en el catálogo público." }
         };
 
-        var existingKeys = await context.SystemSettings.Select(s => s.Key).ToHashSetAsync();
-        var missing = defaults.Where(d => !existingKeys.Contains(d.Key)).ToList();
+        var existingSettings = await context.SystemSettings.ToDictionaryAsync(s => s.Key);
+        if (existingSettings.TryGetValue(SettingKeys.BusinessName, out var nameSetting) &&
+            nameSetting.Value == "Mi Fábrica Capilar")
+        {
+            nameSetting.Value = "FactoryERP";
+            nameSetting.DefaultValue = "FactoryERP";
+            await context.SaveChangesAsync();
+        }
+
+        var missing = defaults.Where(d => !existingSettings.ContainsKey(d.Key)).ToList();
         if (missing.Count > 0)
         {
             await context.SystemSettings.AddRangeAsync(missing);
@@ -125,12 +133,23 @@ public static class DbInitializer
 
     private static async Task SeedMenusAsync(AppDbContext context)
     {
-        if (await context.AppMenus.AnyAsync()) return;
+        var existingMenus = await context.AppMenus.ToListAsync();
+        if (existingMenus.Count > 0)
+        {
+            bool repaired = false;
+            foreach (var menu in existingMenus)
+            {
+                if (menu.Icon == "bi-flask") { menu.Icon = "bi-eyedropper"; repaired = true; }
+                else if (menu.Icon == "bi-scale") { menu.Icon = "bi-calculator"; repaired = true; }
+            }
+            if (repaired) await context.SaveChangesAsync();
+            return;
+        }
 
         var menus = new List<AppMenu>
         {
             new() { Title = "Materias Primas", Url = "raw-materials", Icon = "bi-droplet-half", MenuGroup = "Producción", RequiredPermission = Permissions.RawMaterialsView, DisplayOrder = 10 },
-            new() { Title = "Fórmulas y Recetas", Url = "formulas", Icon = "bi-flask", MenuGroup = "Producción", RequiredPermission = Permissions.FormulasManage, DisplayOrder = 20 },
+            new() { Title = "Fórmulas y Recetas", Url = "formulas", Icon = "bi-eyedropper", MenuGroup = "Producción", RequiredPermission = Permissions.FormulasManage, DisplayOrder = 20 },
             new() { Title = "Órdenes de Producción", Url = "production", Icon = "bi-gear-wide-connected", MenuGroup = "Producción", RequiredPermission = Permissions.ProductionManage, DisplayOrder = 30 },
             new() { Title = "Lotes Terminados", Url = "batches", Icon = "bi-boxes", MenuGroup = "Producción", RequiredPermission = Permissions.ProductionManage, DisplayOrder = 40 },
 
@@ -144,7 +163,7 @@ public static class DbInitializer
 
             new() { Title = "Plan de Cuentas", Url = "accounting/accounts", Icon = "bi-diagram-3", MenuGroup = "Contabilidad", RequiredPermission = Permissions.AccountingView, DisplayOrder = 100 },
             new() { Title = "Libro Diario", Url = "accounting/journal", Icon = "bi-journal-text", MenuGroup = "Contabilidad", RequiredPermission = Permissions.AccountingView, DisplayOrder = 110 },
-            new() { Title = "Balanza de Comprobación", Url = "accounting/trial-balance", Icon = "bi-scale", MenuGroup = "Contabilidad", RequiredPermission = Permissions.ReportsView, DisplayOrder = 120 },
+            new() { Title = "Balanza de Comprobación", Url = "accounting/trial-balance", Icon = "bi-calculator", MenuGroup = "Contabilidad", RequiredPermission = Permissions.ReportsView, DisplayOrder = 120 },
             new() { Title = "Estado de Resultados", Url = "accounting/income-statement", Icon = "bi-graph-up-arrow", MenuGroup = "Contabilidad", RequiredPermission = Permissions.ReportsView, DisplayOrder = 130 },
             new() { Title = "Balance General", Url = "accounting/balance-sheet", Icon = "bi-bank", MenuGroup = "Contabilidad", RequiredPermission = Permissions.ReportsView, DisplayOrder = 140 },
 

@@ -116,6 +116,27 @@ public sealed class ManufacturingAccountingService : IManufacturingAccountingSer
         return CreatePostedEntryAsync(payment.PaymentDate, $"Cobro a cliente #{payment.CustomerId}", payment.Reference, userId, lines);
     }
 
+    public Task<JournalEntry> PostRawMaterialAdjustmentAsync(RawMaterial material, decimal quantityDelta, string reason, string? userId = null)
+    {
+        decimal amount = Math.Round(Math.Abs(quantityDelta) * material.AverageCost, 2, MidpointRounding.AwayFromZero);
+        if (amount <= 0m)
+            throw new InvalidOperationException("El ajuste no tiene valor contable mayor a cero.");
+
+        var lines = quantityDelta > 0m
+            ? new List<(string, decimal, decimal, string)>
+            {
+                (AccountCodes.RawMaterialInventory, amount, 0m, $"Ajuste positivo {material.Sku}: {reason}"),
+                (AccountCodes.RetainedEarnings, 0m, amount, $"Contrapartida ajuste positivo {material.Sku}")
+            }
+            : new List<(string, decimal, decimal, string)>
+            {
+                (AccountCodes.AbnormalProductionLoss, amount, 0m, $"Ajuste negativo {material.Sku}: {reason}"),
+                (AccountCodes.RawMaterialInventory, 0m, amount, $"Salida inventario por ajuste {material.Sku}")
+            };
+
+        return CreatePostedEntryAsync(DateTime.UtcNow, $"Ajuste inventario MP {material.Sku}", material.Sku, userId, lines);
+    }
+
     private static string ResolveCreditSettlementCode(PaymentMethod method) => method switch
     {
         PaymentMethod.Cash => AccountCodes.Cash,

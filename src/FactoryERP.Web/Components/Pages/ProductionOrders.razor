@@ -59,8 +59,8 @@
                 <div class="row g-2 mb-3">
                     <div class="col-md-5">
                         <label class="form-label small">Fórmula</label>
-                        <select class="form-select" @bind="_selectedFormulaId">
-                            @foreach (var f in _formulas) { <option value="@f.Id">@f.Product?.Name - @f.Name (v@f.Version)</option> }
+                        <select class="form-select" @bind="_selectedFormulaId" @bind:after="OnFormulaChangedAsync">
+                            @foreach (var f in _formulas) { <option value="@f.Id">@f.Product?.Name - @f.Name (v@(f.Version))</option> }
                         </select>
                     </div>
                     <div class="col-md-3"><label class="form-label small">Cant. a Producir</label><input type="number" class="form-control" @bind="_plannedQuantity" /></div>

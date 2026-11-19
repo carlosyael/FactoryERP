@@ -88,4 +88,25 @@ public class ProductionCostCalculatorTests
         decimal cpp = ProductionCostCalculator.CalculateWeightedAverageCost(10m, 100m, 10m, 120m);
         cpp.Should().Be(110m);
     }
+
+    [Fact]
+    public void CalculateCompletionCosts_AtExactToleranceBoundary_HasZeroAbnormalLoss()
+    {
+        var res = ProductionCostCalculator.CalculateCompletionCosts(100, 93, 5m, 2m, 5000m, 0m);
+        res.ActualLossPercent.Should().Be(7m);
+        res.AbnormalLossCost.Should().Be(0m);
+        res.CapitalizedInventoryCost.Should().Be(5000m);
+    }
+
+    [Theory]
+    [InlineData(0, 5, 100, 0)]
+    [InlineData(10, -1, 100, 0)]
+    [InlineData(10, 5, -1, 0)]
+    [InlineData(10, 5, 100, -1)]
+    public void CalculateCompletionCosts_InvalidInputs_ThrowsArgumentException(
+        int planned, int actualYield, decimal matCost, decimal overhead)
+    {
+        Action act = () => ProductionCostCalculator.CalculateCompletionCosts(planned, actualYield, 5m, 2m, matCost, overhead);
+        act.Should().Throw<ArgumentException>();
+    }
 }

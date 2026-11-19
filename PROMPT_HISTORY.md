@@ -22,3 +22,17 @@
 - **Diagnóstico:** Faltaba `src/FactoryERP.Web/Properties/launchSettings.json`, por lo que `dotnet run` arrancaba en entorno `Production` por defecto en lugar de `Development` (donde reside `appsettings.Development.json` con SQLite y la clave JWT local).
 - **Resultado:** Añadido `src/FactoryERP.Web/Properties/launchSettings.json` con perfiles `http` (`http://localhost:5210`) y `https` (`https://localhost:7210;http://localhost:5210`) en `Development`. Verificado arranque directo con `dotnet run` respondiendo `200 OK` en `http://localhost:5210/health`, `0 Warning(s) / 0 Error(s)` y `49/49` pruebas aprobadas.
 
+## [2026-11-19] — Auditoría Integral de Módulos, Correcciones UI/Dominio, Paridad Agéntica y Expansión TDD
+- **Requerimiento:** Corregir ícono faltante en *Fórmulas y Recetas*, cambiar el nombre inicial del comercio a `FactoryERP` y proponer nombres de marca trascendentales, auditar todos los módulos y pruebas, y alinear las directrices agénticas con `DomPharma`.
+- **Hallazgos y Correcciones Aplicadas:**
+  - **UI e Iconografía:** Reemplazados íconos no existentes en Bootstrap Icons 1.11.3 (`bi-flask` → `bi-eyedropper` en `AppMenus` y `Settings.razor`, `bi-scale` → `bi-calculator` en `AppMenus`) con reparación automática en `DbInitializer.SeedMenusAsync`; corregido render literal `v@f.Version` → `v@(f.Version)` en `Formulas.razor` y `ProductionOrders.razor`.
+  - **Identidad por Defecto:** Actualizado nombre comercial inicial a `FactoryERP` (con migración automática del placeholder previo) manteniendo edición libre en `/settings`.
+  - **Integridad Contable y Reglas de Negocio:** Corregido reparto residual de descuento/ITBIS en `FefoBatchAllocator.cs` para garantizar cuadre al centavo en entregas multi-lote; agregado `PostRawMaterialAdjustmentAsync` en `IManufacturingAccountingService`/`RawMaterialService.AdjustStockAsync`; endurecidas validaciones en `FormulaService`, `ProductionOrderService` (`BatchCode` único), `ProductService`, `CustomerService` y `SupplierService`.
+  - **Mejoras Operativas en UI:** Costo teórico por fórmula en `Formulas.razor/.cs`; auto-simulación y confirmación `Swal` en `ProductionOrders.razor/.cs`; carrito persistente entre filtros en `PublicCatalog.razor/.cs`; resumen en vivo en `Sales.razor/.cs`; filtros y acciones Mayorizar/Anular en `JournalEntries.razor/.cs`; activación/desactivación protegida de usuarios en `Users.razor`.
+  - **Paridad Agéntica:** Actualizados `AGENTS.md`, `AI_INSTRUCTIONS.md`, `.cursorrules` y creado `docs/ARCHITECTURE_AND_MODULARITY.md` replicando el estándar y flujo de 9 pasos de `DomPharma`.
+- **Verificación de Salida:**
+  - `dotnet build FactoryERP.sln --configuration Release /warnaserror`: `0 Warning(s), 0 Error(s)`.
+  - `dotnet test FactoryERP.sln --configuration Release --no-build`: **86 / 86 pruebas aprobadas** (incluyendo flujo completo E2E manufactura + contabilidad, concurrencia, FEFO centavo exacto, EP/BVA, `DbInitializer`, `AppMenuService` y `AuditInterceptor`).
+  - Smoke test aislado (`http://127.0.0.1:5219`): `/health`, `/catalogo`, `/login` y `/formulas` autenticados en `200 OK` verificando `FactoryERP` y `v1.0` sin `v@f.Version`, `bi-flask` ni `bi-scale`.
+
+

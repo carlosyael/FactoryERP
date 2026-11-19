@@ -8,10 +8,14 @@ namespace FactoryERP.Infrastructure.Services;
 public sealed class RawMaterialService : IRawMaterialService
 {
     private readonly IDbContextFactory<AppDbContext> _contextFactory;
+    private readonly IManufacturingAccountingService? _accounting;
 
-    public RawMaterialService(IDbContextFactory<AppDbContext> contextFactory)
+    public RawMaterialService(
+        IDbContextFactory<AppDbContext> contextFactory,
+        IManufacturingAccountingService? accounting = null)
     {
         _contextFactory = contextFactory;
+        _accounting = accounting;
     }
 
     public async Task<List<RawMaterial>> GetAllAsync(bool includeInactive = false)
@@ -30,7 +34,9 @@ public sealed class RawMaterialService : IRawMaterialService
 
     public async Task<RawMaterial> CreateAsync(RawMaterial material)
     {
-        if (material.CurrentStock < 0m || material.AverageCost < 0m)
+        if (string.IsNullOrWhiteSpace(material.Name))
+            throw new ArgumentException("El nombre del material es obligatorio.");
+        if (material.CurrentStock < 0m || material.AverageCost < 0m || material.MinimumStockLevel < 0m)
             throw new ArgumentException("El stock y el costo no pueden ser negativos.");
 
         await using var context = await _contextFactory.CreateDbContextAsync();
@@ -47,6 +53,9 @@ public sealed class RawMaterialService : IRawMaterialService
 
     public async Task UpdateAsync(RawMaterial material)
     {
+        if (string.IsNullOrWhiteSpace(material.Name))
+            throw new ArgumentException("El nombre del material es obligatorio.");
+
         await using var context = await _contextFactory.CreateDbContextAsync();
         var existing = await context.RawMaterials.FindAsync(material.Id)
             ?? throw new InvalidOperationException("Materia prima no encontrada.");
@@ -71,12 +80,31 @@ public sealed class RawMaterialService : IRawMaterialService
     {
         if (newStock < 0m)
             throw new ArgumentException("El inventario de materia prima no puede ser negativo.", nameof(newStock));
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("El motivo del ajuste es obligatorio.", nameof(reason));
 
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var material = await context.RawMaterials.FindAsync(rawMaterialId)
-            ?? throw new InvalidOperationException("Materia prima no encontrada.");
+        RawMaterial snapshot;
+        decimal delta;
 
-        material.CurrentStock = Math.Round(newStock, 4, MidpointRounding.AwayFromZero);
-        await context.SaveChangesAsync();
+        await using (var context = await _contextFactory.CreateDbContextAsync())
+        {
+            var material = await context.RawMaterials.FindAsync(rawMaterialId)
+                ?? throw new InvalidOperationException("Materia prima no encontrada.");
+
+            decimal roundedNew = Math.Round(newStock, 4, MidpointRounding.AwayFromZero);
+            delta = roundedNew - material.CurrentStock;
+            material.CurrentStock = roundedNew;
+            await context.SaveChangesAsync();
+            snapshot = material;
+        }
+
+        if (delta != 0m && snapshot.AverageCost > 0m && _accounting != null)
+        {
+            decimal absValue = Math.Round(Math.Abs(delta) * snapshot.AverageCost, 2, MidpointRounding.AwayFromZero);
+            if (absValue > 0m)
+            {
+                await _accounting.PostRawMaterialAdjustmentAsync(snapshot, delta, reason.Trim());
+            }
+        }
     }
 }

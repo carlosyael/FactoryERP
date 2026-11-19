@@ -69,4 +69,59 @@ public class FormulaServiceTests
         decimal baseCost = await formulaService.CalculateBaseMaterialCostAsync(formula.Id);
         baseCost.Should().Be(1950m);
     }
+
+    [Fact]
+    public async Task CreateAndUpdate_ValidatesBoundariesDuplicatesAndUpdatesItems()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        var productService = new ProductService(factory);
+        var materialService = new RawMaterialService(factory);
+        var formulaService = new FormulaService(factory);
+
+        var product = await productService.CreateAsync(new Product { Sku = "F-CAP-01", Name = "Acondicionador", RetailPrice = 600m });
+        var mat1 = await materialService.CreateAsync(new RawMaterial { Sku = "F-MP-1", Name = "Base", UnitOfMeasure = UnitOfMeasure.Gram, AverageCost = 0.5m });
+        var mat2 = await materialService.CreateAsync(new RawMaterial { Sku = "F-MP-2", Name = "Aceite", UnitOfMeasure = UnitOfMeasure.Milliliter, AverageCost = 1m });
+
+        Func<Task> badLoss = () => formulaService.CreateAsync(new ProductFormula
+        {
+            ProductId = product.Id, Name = "Bad Loss", BaseYieldQuantity = 10, StandardLossMarginPercent = 100m,
+            Items = [new() { RawMaterialId = mat1.Id, QuantityRequired = 100m, UnitOfMeasure = UnitOfMeasure.Gram }]
+        });
+        await badLoss.Should().ThrowAsync<ArgumentException>();
+
+        Func<Task> badOverhead = () => formulaService.CreateAsync(new ProductFormula
+        {
+            ProductId = product.Id, Name = "Bad CIF", BaseYieldQuantity = 10, OverheadCostPerBatch = -5m,
+            Items = [new() { RawMaterialId = mat1.Id, QuantityRequired = 100m, UnitOfMeasure = UnitOfMeasure.Gram }]
+        });
+        await badOverhead.Should().ThrowAsync<ArgumentException>();
+
+        Func<Task> dupMaterials = () => formulaService.CreateAsync(new ProductFormula
+        {
+            ProductId = product.Id, Name = "Dup Mat", BaseYieldQuantity = 10,
+            Items = [
+                new() { RawMaterialId = mat1.Id, QuantityRequired = 100m, UnitOfMeasure = UnitOfMeasure.Gram },
+                new() { RawMaterialId = mat1.Id, QuantityRequired = 50m, UnitOfMeasure = UnitOfMeasure.Gram }
+            ]
+        });
+        await dupMaterials.Should().ThrowAsync<InvalidOperationException>();
+
+        var created = await formulaService.CreateAsync(new ProductFormula
+        {
+            ProductId = product.Id, Name = "Fórmula v1", Version = "1.0", BaseYieldQuantity = 10, StandardLossMarginPercent = 5m,
+            Items = [new() { RawMaterialId = mat1.Id, QuantityRequired = 1000m, UnitOfMeasure = UnitOfMeasure.Gram }]
+        });
+
+        created.Version = "1.1";
+        created.Items = [
+            new() { RawMaterialId = mat1.Id, QuantityRequired = 900m, UnitOfMeasure = UnitOfMeasure.Gram },
+            new() { RawMaterialId = mat2.Id, QuantityRequired = 100m, UnitOfMeasure = UnitOfMeasure.Milliliter }
+        ];
+        await formulaService.UpdateAsync(created);
+
+        var updated = await formulaService.GetByIdAsync(created.Id);
+        updated!.Version.Should().Be("1.1");
+        updated.Items.Should().HaveCount(2);
+        (await formulaService.CalculateBaseMaterialCostAsync(created.Id)).Should().Be(550m);
+    }
 }

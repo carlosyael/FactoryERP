@@ -41,6 +41,8 @@ internal static class FefoBatchAllocator
                 throw new InvalidOperationException($"Stock insuficiente de '{product.Name}'. Disponible: {available}, Solicitado: {reqItem.Quantity}.");
 
             int remainingToPick = reqItem.Quantity;
+            decimal allocatedDisc = 0m, allocatedTax = 0m;
+
             foreach (var batch in productBatches)
             {
                 if (remainingToPick == 0) break;
@@ -48,9 +50,17 @@ internal static class FefoBatchAllocator
                 batch.QuantityRemaining -= take;
                 remainingToPick -= take;
 
+                bool isLastBatchForLine = remainingToPick == 0;
                 decimal ratio = take / (decimal)reqItem.Quantity;
-                decimal partDisc = Math.Round(calc.DiscountAmount * ratio, 2, MidpointRounding.AwayFromZero);
-                decimal partTax = Math.Round(calc.TaxAmount * ratio, 2, MidpointRounding.AwayFromZero);
+                decimal partDisc = isLastBatchForLine
+                    ? calc.DiscountAmount - allocatedDisc
+                    : Math.Round(calc.DiscountAmount * ratio, 2, MidpointRounding.AwayFromZero);
+                decimal partTax = isLastBatchForLine
+                    ? calc.TaxAmount - allocatedTax
+                    : Math.Round(calc.TaxAmount * ratio, 2, MidpointRounding.AwayFromZero);
+
+                allocatedDisc += partDisc;
+                allocatedTax += partTax;
                 decimal partGross = Math.Round(take * unitPrice, 2, MidpointRounding.AwayFromZero);
 
                 saleItems.Add(new SaleItem

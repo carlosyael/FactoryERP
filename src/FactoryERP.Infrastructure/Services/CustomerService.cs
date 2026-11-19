@@ -33,6 +33,9 @@ public sealed class CustomerService : ICustomerService
 
     public async Task<Customer> CreateAsync(Customer customer)
     {
+        if (string.IsNullOrWhiteSpace(customer.Name))
+            throw new ArgumentException("El nombre del cliente es obligatorio.");
+
         await using var context = await _contextFactory.CreateDbContextAsync();
         customer.Name = customer.Name.Trim();
         customer.RncCedula = customer.RncCedula.Trim();
@@ -43,6 +46,9 @@ public sealed class CustomerService : ICustomerService
 
     public async Task UpdateAsync(Customer customer)
     {
+        if (string.IsNullOrWhiteSpace(customer.Name))
+            throw new ArgumentException("El nombre del cliente es obligatorio.");
+
         await using var context = await _contextFactory.CreateDbContextAsync();
         var existing = await context.Customers.FindAsync(customer.Id)
             ?? throw new InvalidOperationException("Cliente no encontrado.");

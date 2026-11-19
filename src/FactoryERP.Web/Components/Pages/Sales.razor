@@ -73,6 +73,15 @@
                         <div class="col-md-1 text-end"><button class="btn btn-sm btn-outline-danger" @onclick="() => _lines.Remove(line)">×</button></div>
                     </div>
                 }
+                @{
+                    var preview = ComputeSalePreview();
+                }
+                <div class="alert alert-light border small mt-3 mb-0 d-flex justify-content-between">
+                    <span>SubTotal: <strong>RD$ @preview.SubTotal.ToString("N2")</strong></span>
+                    <span>Descuento: <strong>RD$ @preview.Discount.ToString("N2")</strong></span>
+                    <span>ITBIS (18%): <strong>RD$ @preview.Tax.ToString("N2")</strong></span>
+                    <span class="text-brand">Total Est.: <strong>RD$ @preview.Total.ToString("N2")</strong></span>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" @onclick="() => _showNewModal = false">Cancelar</button>

@@ -84,4 +84,32 @@ public class JournalEntryServiceTests
         var voided = await journal.GetByIdAsync(draft.Id);
         voided!.Status.Should().Be(JournalEntryStatus.Voided);
     }
+
+    [Fact]
+    public async Task CreatePostVoidAndExpense_RejectsInvalidRulesAndExcludesVoidedFromTrialBalance()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        var chart = new ChartOfAccountsService(factory);
+        await chart.SeedStandardChartAsync();
+        var accounts = (await chart.GetAllAsync()).ToDictionary(a => a.Code, a => a.Id);
+
+        var journal = new JournalEntryService(factory);
+        var reports = new FinancialReportService(factory);
+
+        Func<Task> bothSides = () => journal.CreateAsync(new CreateJournalEntryRequest(
+            DateTime.UtcNow, "Línea inválida", "INV-1", true,
+            [new(accounts[AccountCodes.Cash], 100m, 50m), new(accounts[AccountCodes.ShareCapital], 0m, 50m)]));
+        await bothSides.Should().ThrowAsync<InvalidOperationException>();
+
+        Func<Task> zeroExpense = () => journal.RecordExpenseAsync(AccountCodes.OperatingExpenses, AccountCodes.Cash, 0m, "Gasto cero", "E-0");
+        await zeroExpense.Should().ThrowAsync<ArgumentException>();
+
+        var expense = await journal.RecordExpenseAsync(AccountCodes.OperatingExpenses, AccountCodes.Cash, 500m, "Papelería", "E-1");
+        Func<Task> postAgain = () => journal.PostAsync(expense.Id);
+        await postAgain.Should().ThrowAsync<InvalidOperationException>();
+
+        await journal.VoidAsync(expense.Id);
+        var trial = await reports.GetTrialBalanceAsync(DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(1));
+        trial.Rows.Should().BeEmpty();
+    }
 }

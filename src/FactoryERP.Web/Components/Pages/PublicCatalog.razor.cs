@@ -13,8 +13,9 @@ public partial class PublicCatalog
     private BusinessProfileDto? _profile;
     private List<PublicCatalogItemDto> _items = new();
     private List<string> _lines = new();
-    private readonly Dictionary<int, int> _cart = new();
+    private readonly Dictionary<int, (PublicCatalogItemDto Item, int Qty)> _cart = new();
     private PublicCatalogItemDto? _detailItem;
+    private bool _showCart;
     private string _search = "";
     private string _selectedLine = "";
     private bool _onlyInStock;
@@ -31,9 +32,18 @@ public partial class PublicCatalog
         _lines = await CatalogService.GetProductLinesAsync();
     }
 
-    private void AddToCart(int productId)
+    private void AddToCart(PublicCatalogItemDto item)
     {
-        _cart[productId] = _cart.TryGetValue(productId, out int qty) ? qty + 1 : 1;
+        int next = _cart.TryGetValue(item.ProductId, out var existing) ? existing.Qty + 1 : 1;
+        _cart[item.ProductId] = (item, next);
+    }
+
+    private void ChangeQty(int productId, int delta)
+    {
+        if (!_cart.TryGetValue(productId, out var existing)) return;
+        int next = existing.Qty + delta;
+        if (next <= 0) _cart.Remove(productId);
+        else _cart[productId] = (existing.Item, next);
     }
 
     private string BuildWhatsAppUrl()
@@ -41,10 +51,9 @@ public partial class PublicCatalog
         string phone = new string((_profile?.WhatsAppNumber ?? "").Where(char.IsDigit).ToArray());
         var sb = new StringBuilder();
         sb.AppendLine($"Hola {_profile?.BusinessName}, me interesa realizar este pedido:");
-        foreach (var (productId, qty) in _cart)
+        foreach (var (_, entry) in _cart)
         {
-            var item = _items.FirstOrDefault(i => i.ProductId == productId);
-            if (item != null) sb.AppendLine($"- {qty}x {item.Name} ({item.Presentation})");
+            sb.AppendLine($"- {entry.Qty}x {entry.Item.Name} ({entry.Item.Presentation})");
         }
         string encoded = Uri.EscapeDataString(sb.ToString());
         return string.IsNullOrWhiteSpace(phone) ? $"https://wa.me/?text={encoded}" : $"https://wa.me/{phone}?text={encoded}";

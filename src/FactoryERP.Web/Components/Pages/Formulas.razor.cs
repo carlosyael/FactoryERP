@@ -1,4 +1,5 @@
 using CurrieTechnologies.Razor.SweetAlert2;
+using FactoryERP.Core.Domain;
 using FactoryERP.Core.Entities;
 using FactoryERP.Core.Enums;
 using FactoryERP.Core.Interfaces;
@@ -16,15 +17,31 @@ public partial class Formulas
     private List<ProductFormula> _formulas = new();
     private List<Product> _products = new();
     private List<RawMaterial> _materials = new();
+    private readonly Dictionary<int, (decimal MaterialCost, decimal UnitCost)> _formulaSummary = new();
     private ProductFormula _editing = new();
     private List<EditableFormulaItem> _items = new();
     private bool _showModal;
 
     protected override async Task OnInitializedAsync()
     {
-        _formulas = await FormulaService.GetAllAsync(true);
         _products = await ProductService.GetAllAsync();
         _materials = await RawMaterialService.GetAllAsync();
+        await LoadFormulasAsync();
+    }
+
+    private async Task LoadFormulasAsync()
+    {
+        _formulas = await FormulaService.GetAllAsync(true);
+        _formulaSummary.Clear();
+        foreach (var f in _formulas)
+        {
+            decimal matCost = await FormulaService.CalculateBaseMaterialCostAsync(f.Id);
+            int expectedYield = ProductionCostCalculator.CalculateExpectedResultingQuantity(f.BaseYieldQuantity, f.StandardLossMarginPercent);
+            decimal unitCost = expectedYield > 0
+                ? Math.Round((matCost + f.OverheadCostPerBatch) / expectedYield, 2, MidpointRounding.AwayFromZero)
+                : 0m;
+            _formulaSummary[f.Id] = (matCost, unitCost);
+        }
     }
 
     private void OpenNewModal()
@@ -84,7 +101,7 @@ public partial class Formulas
             else await FormulaService.UpdateAsync(_editing);
 
             _showModal = false;
-            _formulas = await FormulaService.GetAllAsync(true);
+            await LoadFormulasAsync();
             await Swal.FireAsync("Fórmula guardada", "Receta de producción actualizada.", SweetAlertIcon.Success);
         }
         catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }

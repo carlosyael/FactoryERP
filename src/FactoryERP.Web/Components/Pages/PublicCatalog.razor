@@ -17,11 +17,14 @@ else
                 <h2 class="fw-bold mb-1">Catálogo Capilar — @(_profile?.BusinessName ?? "")</h2>
                 <p class="text-muted mb-0">@(_profile?.CatalogWelcomeMessage ?? "")</p>
             </div>
-            <div class="col-md-4 text-md-end">
+            <div class="col-md-4 text-md-end d-flex justify-content-md-end gap-2">
                 @if (_cart.Count > 0)
                 {
+                    <button class="btn btn-outline-secondary" @onclick="() => _showCart = true">
+                        <i class="bi bi-cart-plus me-1"></i> Ver Pedido (@_cart.Values.Sum(c => c.Qty))
+                    </button>
                     <a href="@BuildWhatsAppUrl()" target="_blank" class="btn btn-success">
-                        <i class="bi bi-whatsapp me-1"></i> Pedir (@_cart.Values.Sum() uds)
+                        <i class="bi bi-whatsapp me-1"></i> Pedir (@_cart.Values.Sum(c => c.Qty) uds)
                     </a>
                 }
             </div>
@@ -72,7 +75,7 @@ else
                         </div>
                         <div class="d-flex gap-2">
                             <button class="btn btn-sm btn-outline-secondary flex-fill" @onclick="() => _detailItem = p">Detalles</button>
-                            <button class="btn btn-sm btn-brand flex-fill" @onclick="() => AddToCart(p.ProductId)">+ Agregar</button>
+                            <button class="btn btn-sm btn-brand flex-fill" @onclick="() => AddToCart(p)">+ Agregar</button>
                         </div>
                     </div>
                 </div>
@@ -93,7 +96,33 @@ else
                 @if (!string.IsNullOrWhiteSpace(_detailItem.UsageInstructions)) { <p><strong>Modo de uso:</strong> @_detailItem.UsageInstructions</p> }
             </div>
             <div class="modal-footer">
-                <button class="btn btn-brand btn-sm" @onclick="() => { AddToCart(_detailItem.ProductId); _detailItem = null; }">Agregar al pedido</button>
+                <button class="btn btn-brand btn-sm" @onclick="() => { AddToCart(_detailItem); _detailItem = null; }">Agregar al pedido</button>
+            </div>
+        </div></div>
+    </div>
+}
+
+@if (_showCart)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog"><div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Resumen de Pedido</h5><button class="btn-close" @onclick="() => _showCart = false"></button></div>
+            <div class="modal-body">
+                @foreach (var entry in _cart.Values.ToList())
+                {
+                    <div class="d-flex justify-content-between align-items-center py-2 border-bottom small">
+                        <div><strong>@entry.Item.Name</strong> <span class="text-muted">(@entry.Item.Presentation)</span></div>
+                        <div class="d-flex align-items-center gap-1">
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => ChangeQty(entry.Item.ProductId, -1)">-</button>
+                            <span class="px-2 fw-bold">@entry.Qty</span>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => ChangeQty(entry.Item.ProductId, 1)">+</button>
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-danger btn-sm" @onclick="() => { _cart.Clear(); _showCart = false; }">Vaciar</button>
+                <a href="@BuildWhatsAppUrl()" target="_blank" class="btn btn-success btn-sm"><i class="bi bi-whatsapp me-1"></i> Enviar por WhatsApp</a>
             </div>
         </div></div>
     </div>

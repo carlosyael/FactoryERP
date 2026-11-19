@@ -144,4 +144,48 @@ public class SaleServiceTests
         var batches = await productService.GetBatchesAsync(product.Id);
         batches.Sum(b => b.QuantityRemaining).Should().Be(1);
     }
+
+    [Fact]
+    public async Task CreateSale_MultiBatchSplitWithOddDiscount_ReconcilesLineTotalsToCent()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        var (product, salon, saleService, _, _, _) = await SetupAsync(factory, batch1Qty: 1, batch2Qty: 5);
+
+        // 3 uds * 600 = 1800, desc 7% = 126, net = 1674, ITBIS 18% = 301.32, Total = 1975.32
+        var sale = await saleService.CreateSaleAsync(new CreateSaleRequest(
+            salon.Id, PaymentMethod.Cash, DateTime.UtcNow, "Split centavos",
+            [new(product.Id, 3, DiscountPercent: 7m)]));
+
+        sale.Items.Should().HaveCount(2);
+        sale.Items.Sum(i => i.DiscountAmount).Should().Be(sale.DiscountAmount);
+        sale.Items.Sum(i => i.TaxAmount).Should().Be(sale.TaxAmount);
+        sale.Items.Sum(i => i.LineTotal).Should().Be(sale.Total);
+    }
+
+    [Fact]
+    public async Task CreateSale_InvalidInputsOrExceedsDiscountOrTaxExempt_BehavesCorrectly()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        var (product, salon, saleService, productService, _, _) = await SetupAsync(factory, batch1Qty: 5, batch2Qty: 0);
+
+        Func<Task> emptyAct = () => saleService.CreateSaleAsync(new(salon.Id, PaymentMethod.Cash, null, "", []));
+        await emptyAct.Should().ThrowAsync<InvalidOperationException>();
+
+        Func<Task> highDiscAct = () => saleService.CreateSaleAsync(new(salon.Id, PaymentMethod.Cash, null, "", [new(product.Id, 1, DiscountPercent: 50m)]));
+        await highDiscAct.Should().ThrowAsync<ArgumentException>();
+
+        Func<Task> dupLineOverStock = () => saleService.CreateSaleAsync(new(salon.Id, PaymentMethod.Cash, null, "", [new(product.Id, 3), new(product.Id, 3)]));
+        await dupLineOverStock.Should().ThrowAsync<InvalidOperationException>();
+
+        product.IsTaxable = false;
+        await productService.UpdateAsync(product);
+        var exemptSale = await saleService.CreateSaleAsync(new(salon.Id, PaymentMethod.Cash, null, "Exento", [new(product.Id, 2)]));
+        exemptSale.TaxAmount.Should().Be(0m);
+        exemptSale.Total.Should().Be(1200m);
+
+        product.IsActive = false;
+        await productService.UpdateAsync(product);
+        Func<Task> inactiveAct = () => saleService.CreateSaleAsync(new(salon.Id, PaymentMethod.Cash, null, "", [new(product.Id, 1)]));
+        await inactiveAct.Should().ThrowAsync<InvalidOperationException>();
+    }
 }

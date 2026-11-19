@@ -15,6 +15,8 @@ public partial class JournalEntries
 
     private List<JournalEntry> _entries = new();
     private List<AccountingAccount> _postableAccounts = new();
+    private DateTime _startDate = DateTime.Today.AddMonths(-1);
+    private DateTime _endDate = DateTime.Today;
 
     private bool _showExpense;
     private string _expAccountCode = AccountCodes.OperatingExpenses;
@@ -30,9 +32,12 @@ public partial class JournalEntries
 
     protected override async Task OnInitializedAsync()
     {
-        _entries = await JournalService.GetAllAsync();
+        await LoadEntriesAsync();
         _postableAccounts = await ChartService.GetPostableAccountsAsync();
     }
+
+    private async Task LoadEntriesAsync()
+        => _entries = await JournalService.GetAllAsync(_startDate, _endDate);
 
     private void OpenExpenseModal()
     {
@@ -63,7 +68,7 @@ public partial class JournalEntries
         {
             await JournalService.RecordExpenseAsync(_expAccountCode, _payAccountCode, _expAmount, _expConcept, _expRef);
             _showExpense = false;
-            _entries = await JournalService.GetAllAsync();
+            await LoadEntriesAsync();
             await Swal.FireAsync("Gasto registrado", "Asiento mayorizado correctamente.", SweetAlertIcon.Success);
         }
         catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
@@ -78,10 +83,38 @@ public partial class JournalEntries
                 _manualLines.Select(l => new CreateJournalEntryLineRequest(l.AccountId, l.Debit, l.Credit, _concept)).ToList());
             await JournalService.CreateAsync(req);
             _showManual = false;
-            _entries = await JournalService.GetAllAsync();
+            await LoadEntriesAsync();
             await Swal.FireAsync("Asiento mayorizado", "Registro guardado.", SweetAlertIcon.Success);
         }
         catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
+    }
+
+    private async Task PostEntryAsync(int entryId)
+    {
+        try
+        {
+            await JournalService.PostAsync(entryId);
+            await LoadEntriesAsync();
+            await Swal.FireAsync("Mayorizado", "Asiento contabilizado.", SweetAlertIcon.Success);
+        }
+        catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
+    }
+
+    private async Task VoidEntryAsync(int entryId)
+    {
+        var confirm = await Swal.FireAsync(new SweetAlertOptions
+        {
+            Title = "¿Anular asiento?",
+            Text = "El asiento dejará de afectar los reportes financieros.",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, anular",
+            CancelButtonText = "Cancelar"
+        });
+        if (!confirm.IsConfirmed) return;
+
+        await JournalService.VoidAsync(entryId);
+        await LoadEntriesAsync();
     }
 
     private sealed class EditableLine

@@ -16,16 +16,21 @@
             <div class="card p-3 h-100">
                 <div class="d-flex justify-content-between align-items-start mb-2">
                     <div>
-                        <span class="badge badge-brand me-1">v@f.Version</span>
+                        <span class="badge badge-brand me-1">v@(f.Version)</span>
                         <strong class="fs-6">@f.Name</strong>
                         <div class="small text-muted">Producto: @f.Product?.Name (@f.Product?.Presentation)</div>
                     </div>
                     <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenEditModal(f)"><i class="bi bi-pencil"></i></button>
                 </div>
-                <div class="d-flex gap-3 small mb-2">
+                <div class="d-flex flex-wrap gap-3 small mb-2">
                     <span>Rendimiento base: <strong>@f.BaseYieldQuantity uds</strong></span>
                     <span>Merma estándar: <strong>@f.StandardLossMarginPercent.ToString("N2")%</strong></span>
                     <span>CIF lote: <strong>RD$ @f.OverheadCostPerBatch.ToString("N2")</strong></span>
+                    @if (_formulaSummary.TryGetValue(f.Id, out var summary))
+                    {
+                        <span>Materiales: <strong>RD$ @summary.MaterialCost.ToString("N2")</strong></span>
+                        <span class="text-brand">Unit. est.: <strong>RD$ @summary.UnitCost.ToString("N2")</strong></span>
+                    }
                 </div>
                 <ul class="list-group list-group-flush small">
                     @foreach (var item in f.Items)

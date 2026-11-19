@@ -3,6 +3,7 @@ using FactoryERP.Core.Entities;
 using FactoryERP.Core.Enums;
 using FactoryERP.Core.Interfaces;
 using FactoryERP.Core.Models;
+using FactoryERP.Web.Services;
 using Microsoft.AspNetCore.Components;
 
 namespace FactoryERP.Web.Components.Pages;
@@ -11,6 +12,7 @@ public partial class ProductionOrders
 {
     [Inject] private IProductionOrderService ProductionOrderService { get; set; } = default!;
     [Inject] private IFormulaService FormulaService { get; set; } = default!;
+    [Inject] private ILoadingService LoadingService { get; set; } = default!;
     [Inject] private SweetAlertService Swal { get; set; } = default!;
 
     private List<ProductionOrder> _orders = new();
@@ -36,12 +38,24 @@ public partial class ProductionOrders
 
     private async Task OpenCreateModal()
     {
-        _selectedFormulaId = _formulas.FirstOrDefault()?.Id ?? 0;
-        _plannedQuantity = _formulas.FirstOrDefault()?.BaseYieldQuantity ?? 10;
-        _lossMargin = _formulas.FirstOrDefault()?.StandardLossMarginPercent ?? 5m;
+        var first = _formulas.FirstOrDefault();
+        _selectedFormulaId = first?.Id ?? 0;
+        _plannedQuantity = first?.BaseYieldQuantity ?? 10;
+        _lossMargin = first?.StandardLossMarginPercent ?? 5m;
         _batchCode = "";
         _showCreate = true;
         if (_selectedFormulaId > 0) await SimulateAsync();
+    }
+
+    private async Task OnFormulaChangedAsync()
+    {
+        var formula = _formulas.FirstOrDefault(f => f.Id == _selectedFormulaId);
+        if (formula != null)
+        {
+            _plannedQuantity = formula.BaseYieldQuantity;
+            _lossMargin = formula.StandardLossMarginPercent;
+            await SimulateAsync();
+        }
     }
 
     private async Task SimulateAsync()
@@ -68,6 +82,7 @@ public partial class ProductionOrders
 
     private async Task StartAsync(int orderId)
     {
+        LoadingService.Show("Iniciando producción...");
         try
         {
             await ProductionOrderService.StartProductionAsync(orderId);
@@ -75,6 +90,7 @@ public partial class ProductionOrders
             await Swal.FireAsync("Producción iniciada", "Insumos descontados y registrados en WIP.", SweetAlertIcon.Success);
         }
         catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
+        finally { LoadingService.Hide(); }
     }
 
     private void OpenCompleteModal(ProductionOrder o)
@@ -89,6 +105,7 @@ public partial class ProductionOrders
     private async Task ConfirmCompleteAsync()
     {
         if (_completeTarget == null) return;
+        LoadingService.Show("Cerrando lote...");
         try
         {
             await ProductionOrderService.CompleteProductionAsync(new CompleteProductionRequest(
@@ -98,10 +115,22 @@ public partial class ProductionOrders
             await Swal.FireAsync("Lote completado", "Producto terminado ingresado al catálogo y contabilizado.", SweetAlertIcon.Success);
         }
         catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
+        finally { LoadingService.Hide(); }
     }
 
     private async Task CancelAsync(int orderId)
     {
+        var confirm = await Swal.FireAsync(new SweetAlertOptions
+        {
+            Title = "¿Cancelar orden de producción?",
+            Text = "Si la orden está en proceso, se devolverán los insumos al almacén y se revertirá el WIP.",
+            Icon = SweetAlertIcon.Warning,
+            ShowCancelButton = true,
+            ConfirmButtonText = "Sí, cancelar",
+            CancelButtonText = "Volver"
+        });
+        if (!confirm.IsConfirmed) return;
+
         try
         {
             await ProductionOrderService.CancelProductionAsync(orderId, "Cancelada desde panel");

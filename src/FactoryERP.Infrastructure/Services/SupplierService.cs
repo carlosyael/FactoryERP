@@ -33,6 +33,9 @@ public sealed class SupplierService : ISupplierService
 
     public async Task<Supplier> CreateAsync(Supplier supplier)
     {
+        if (string.IsNullOrWhiteSpace(supplier.Name))
+            throw new ArgumentException("El nombre del suplidor es obligatorio.");
+
         await using var context = await _contextFactory.CreateDbContextAsync();
         supplier.Name = supplier.Name.Trim();
         context.Suppliers.Add(supplier);
@@ -42,6 +45,9 @@ public sealed class SupplierService : ISupplierService
 
     public async Task UpdateAsync(Supplier supplier)
     {
+        if (string.IsNullOrWhiteSpace(supplier.Name))
+            throw new ArgumentException("El nombre del suplidor es obligatorio.");
+
         await using var context = await _contextFactory.CreateDbContextAsync();
         var existing = await context.Suppliers.FindAsync(supplier.Id)
             ?? throw new InvalidOperationException("Suplidor no encontrado.");

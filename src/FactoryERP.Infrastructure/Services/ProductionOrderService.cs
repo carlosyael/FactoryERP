@@ -1,5 +1,6 @@
 using FactoryERP.Core.Constants;
 using FactoryERP.Core.Entities;
+using FactoryERP.Core.Enums;
 using FactoryERP.Core.Interfaces;
 using FactoryERP.Core.Models;
 using FactoryERP.Infrastructure.Data;
@@ -89,6 +90,11 @@ public sealed class ProductionOrderService : IProductionOrderService
         };
 
         await using var context = await _contextFactory.CreateDbContextAsync();
+        bool batchExists = await context.FinishedBatches.AnyAsync(b => b.BatchCode == batch)
+            || await context.ProductionOrders.AnyAsync(o => o.BatchCode == batch && o.Status != ProductionOrderStatus.Cancelled);
+        if (batchExists)
+            throw new InvalidOperationException($"Ya existe una orden o lote registrado con el código '{batch}'.");
+
         context.ProductionOrders.Add(order);
         await context.SaveChangesAsync();
         return (await GetByIdAsync(order.Id))!;

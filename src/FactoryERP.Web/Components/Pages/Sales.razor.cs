@@ -1,8 +1,10 @@
 using CurrieTechnologies.Razor.SweetAlert2;
+using FactoryERP.Core.Domain;
 using FactoryERP.Core.Entities;
 using FactoryERP.Core.Enums;
 using FactoryERP.Core.Interfaces;
 using FactoryERP.Core.Models;
+using FactoryERP.Web.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 
@@ -14,6 +16,7 @@ public partial class Sales
     [Inject] private ICustomerService CustomerService { get; set; } = default!;
     [Inject] private IProductService ProductService { get; set; } = default!;
     [Inject] private IBusinessProfileService BusinessProfileService { get; set; } = default!;
+    [Inject] private ILoadingService LoadingService { get; set; } = default!;
     [Inject] private SweetAlertService Swal { get; set; } = default!;
     [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
 
@@ -47,8 +50,31 @@ public partial class Sales
         if (_products.Count > 0) _lines.Add(new() { ProductId = _products[0].Id, Quantity = 1 });
     }
 
+    private (decimal SubTotal, decimal Discount, decimal Tax, decimal Total) ComputeSalePreview()
+    {
+        var customerType = _customers.FirstOrDefault(c => c.Id == _customerId)?.CustomerType ?? CustomerType.Retail;
+        decimal sub = 0m, disc = 0m, tax = 0m, tot = 0m;
+        decimal defaultTax = _profile?.DefaultTaxRate ?? 0.18m;
+        decimal maxDisc = _profile?.MaxDiscountPercentage ?? 30m;
+
+        foreach (var line in _lines)
+        {
+            var prod = _products.FirstOrDefault(p => p.Id == line.ProductId);
+            if (prod == null || line.Quantity <= 0 || line.DiscountPercent < 0 || line.DiscountPercent > maxDisc) continue;
+            decimal price = prod.GetPriceForCustomerType(customerType);
+            decimal rate = prod.IsTaxable ? (prod.TaxRate > 0 ? prod.TaxRate : defaultTax) : 0m;
+            var res = PricingCalculator.CalculateSaleLine(line.Quantity, price, line.DiscountPercent, maxDisc, prod.IsTaxable, rate);
+            sub += res.GrossAmount;
+            disc += res.DiscountAmount;
+            tax += res.TaxAmount;
+            tot += res.LineTotal;
+        }
+        return (sub, disc, tax, tot);
+    }
+
     private async Task SaveSaleAsync()
     {
+        LoadingService.Show("Procesando venta...");
         try
         {
             var req = new CreateSaleRequest(
@@ -61,6 +87,7 @@ public partial class Sales
             await Swal.FireAsync("Venta completada", $"Comprobante {_selectedSale.SaleNumber} emitido.", SweetAlertIcon.Success);
         }
         catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
+        finally { LoadingService.Hide(); }
     }
 
     private async Task PrintReceiptAsync() => await JSRuntime.InvokeVoidAsync("printPage");

@@ -184,4 +184,44 @@ public class ProductionOrderServiceTests
         outcomes.Count(x => x).Should().Be(1);
         (await matSvc.GetByIdAsync(baseMat.Id))!.CurrentStock.Should().Be(1m);
     }
+
+    [Fact]
+    public async Task ProductionStateTransitions_DuplicateBatchZeroYieldAndDraftCancel_WorkStrictly()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        var (product, formula, _, _, prodService, _, prodSvc, journalSvc) = await SetupAsync(factory);
+
+        var draft1 = await prodService.CreateDraftAsync(new CreateProductionOrderRequest(formula.Id, 10, 5m, null, null, "LOT-UNIQ-1"));
+
+        Func<Task> dupBatch = () => prodService.CreateDraftAsync(new CreateProductionOrderRequest(formula.Id, 10, 5m, null, null, "LOT-UNIQ-1"));
+        await dupBatch.Should().ThrowAsync<InvalidOperationException>();
+
+        // Completar borrador antes de iniciar debe fallar
+        Func<Task> completeDraft = () => prodService.CompleteProductionAsync(new CompleteProductionRequest(draft1.Id, 9, null, null));
+        await completeDraft.Should().ThrowAsync<InvalidOperationException>();
+
+        // Cancelar borrador no genera asiento contable
+        var cancelledDraft = await prodService.CancelProductionAsync(draft1.Id, "No requerida");
+        cancelledDraft.Status.Should().Be(ProductionOrderStatus.Cancelled);
+        (await journalSvc.GetAllAsync()).Should().BeEmpty();
+
+        // Iniciar orden ya cancelada debe fallar
+        Func<Task> startCancelled = () => prodService.StartProductionAsync(draft1.Id);
+        await startCancelled.Should().ThrowAsync<InvalidOperationException>();
+
+        // Cierre con 0 unidades resultantes => 100% pérdida anormal y 0 lotes creados
+        var draft2 = await prodService.CreateDraftAsync(new CreateProductionOrderRequest(formula.Id, 10, 5m, null, null, "LOT-FAIL-0"));
+        await prodService.StartProductionAsync(draft2.Id);
+        var zeroYield = await prodService.CompleteProductionAsync(new CompleteProductionRequest(draft2.Id, 0, 200m, null));
+
+        zeroYield.Status.Should().Be(ProductionOrderStatus.Completed);
+        zeroYield.ActualYieldQuantity.Should().Be(0);
+        zeroYield.AbnormalLossCost.Should().Be(zeroYield.ActualMaterialCost + 200m);
+        zeroYield.CapitalizedInventoryCost.Should().Be(0m);
+        (await prodSvc.GetBatchesAsync(product.Id)).Should().BeEmpty();
+
+        // Cancelar orden completada debe fallar
+        Func<Task> cancelCompleted = () => prodService.CancelProductionAsync(draft2.Id, "Tarde");
+        await cancelCompleted.Should().ThrowAsync<InvalidOperationException>();
+    }
 }

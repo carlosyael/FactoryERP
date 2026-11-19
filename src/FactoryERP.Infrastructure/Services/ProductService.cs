@@ -38,6 +38,7 @@ public sealed class ProductService : IProductService
 
     public async Task<Product> CreateAsync(Product product)
     {
+        ValidateProduct(product);
         await using var context = await _contextFactory.CreateDbContextAsync();
         string sku = product.Sku.Trim().ToUpperInvariant();
         if (await context.Products.AnyAsync(p => p.Sku == sku))
@@ -52,6 +53,7 @@ public sealed class ProductService : IProductService
 
     public async Task UpdateAsync(Product product)
     {
+        ValidateProduct(product);
         await using var context = await _contextFactory.CreateDbContextAsync();
         var existing = await context.Products.FindAsync(product.Id)
             ?? throw new InvalidOperationException("Producto no encontrado.");
@@ -92,5 +94,17 @@ public sealed class ProductService : IProductService
         if (productId.HasValue) query = query.Where(b => b.ProductId == productId.Value);
 
         return await query.OrderByDescending(b => b.ProductionDate).ThenByDescending(b => b.Id).ToListAsync();
+    }
+
+    private static void ValidateProduct(Product product)
+    {
+        if (string.IsNullOrWhiteSpace(product.Name))
+            throw new ArgumentException("El nombre del producto es obligatorio.");
+        if (string.IsNullOrWhiteSpace(product.Sku))
+            throw new ArgumentException("El SKU del producto es obligatorio.");
+        if (product.RetailPrice < 0m || product.SalonPrice < 0m || product.WholesalePrice < 0m || product.Cost < 0m)
+            throw new ArgumentException("Los precios y costos no pueden ser negativos.");
+        if (product.TaxRate < 0m || product.TaxRate > 1m)
+            throw new ArgumentException("La tasa de ITBIS debe estar entre 0 y 1.");
     }
 }

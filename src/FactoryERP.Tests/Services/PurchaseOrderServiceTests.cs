@@ -67,4 +67,33 @@ public class PurchaseOrderServiceTests
         entries.All(e => e.Lines.Sum(l => l.Debit) == e.Lines.Sum(l => l.Credit)).Should().BeTrue();
         entries.SelectMany(e => e.Lines).Should().Contain(l => l.Account!.Code == AccountCodes.RawMaterialInventory && l.Debit == 2000m);
     }
+
+    [Fact]
+    public async Task ReceivePurchase_CashPurchaseAndInvalidQuantities_BehavesStrictly()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        var chart = new ChartOfAccountsService(factory);
+        await chart.SeedStandardChartAsync();
+
+        var settings = new SystemSettingService(factory, new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions()));
+        var accounting = new ManufacturingAccountingService(factory);
+        var supplierService = new SupplierService(factory, accounting);
+        var materialService = new RawMaterialService(factory, accounting);
+        var purchaseService = new PurchaseOrderService(factory, settings, accounting);
+
+        var supplier = await supplierService.CreateAsync(new Supplier { Name = "Suplidor Contado" });
+        var mat = await materialService.CreateAsync(new RawMaterial { Sku = "MP-EX-1", Name = "Agua Desmineralizada", UnitOfMeasure = UnitOfMeasure.Liter });
+
+        Func<Task> emptyItems = () => purchaseService.ReceivePurchaseAsync(new(supplier.Id, PaymentMethod.Cash, null, "", []));
+        await emptyItems.Should().ThrowAsync<InvalidOperationException>();
+
+        Func<Task> zeroQty = () => purchaseService.ReceivePurchaseAsync(new(supplier.Id, PaymentMethod.Cash, null, "", [new(mat.Id, 0m, 10m)]));
+        await zeroQty.Should().ThrowAsync<ArgumentException>();
+
+        var po = await purchaseService.ReceivePurchaseAsync(new(supplier.Id, PaymentMethod.Cash, null, "Contado exento", [new(mat.Id, 50m, 10m, IsTaxable: false)]));
+        po.TaxAmount.Should().Be(0m);
+        po.Total.Should().Be(500m);
+        po.AmountPaid.Should().Be(500m);
+        (await supplierService.GetByIdAsync(supplier.Id))!.CurrentBalance.Should().Be(0m);
+    }
 }
