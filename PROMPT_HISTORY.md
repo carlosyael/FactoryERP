@@ -16,3 +16,9 @@
   - **Auditoría Clean Code (SRP):** 0 archivos de producción superan las 185 líneas.
   - **Smoke Test en vivo (`FactoryERP.Web.exe`, `Development` SQLite):** `/health` HTTP 200 (`connected`), `/catalogo` HTTP 200 (muestra comercio configurado y producto sembrado sin exponer costos), `/login` HTTP 200, autenticación Anti-CSRF `POST /login` y acceso a `/` (*Panel Principal*) HTTP 200.
   - **Contenedores / Azure:** `src/Dockerfile`, `docker-compose.yml`, `.github/workflows/ci.yml`, `infra/deploy-azure.ps1` y `docs/AZURE_DEPLOYMENT.md` listos (`docker build` local omitido porque el daemon de Docker Desktop no estaba iniciado en el host).
+
+## [2026-11-19] — Perfil de Arranque Local (`launchSettings.json`)
+- **Requerimiento:** Corregir fallo al ejecutar `dotnet run --project .\src\FactoryERP.Web\FactoryERP.Web.csproj` sin variables de entorno manuales (`JWT_SECRET_KEY debe configurarse con al menos 32 bytes`).
+- **Diagnóstico:** Faltaba `src/FactoryERP.Web/Properties/launchSettings.json`, por lo que `dotnet run` arrancaba en entorno `Production` por defecto en lugar de `Development` (donde reside `appsettings.Development.json` con SQLite y la clave JWT local).
+- **Resultado:** Añadido `src/FactoryERP.Web/Properties/launchSettings.json` con perfiles `http` (`http://localhost:5210`) y `https` (`https://localhost:7210;http://localhost:5210`) en `Development`. Verificado arranque directo con `dotnet run` respondiendo `200 OK` en `http://localhost:5210/health`, `0 Warning(s) / 0 Error(s)` y `49/49` pruebas aprobadas.
+
