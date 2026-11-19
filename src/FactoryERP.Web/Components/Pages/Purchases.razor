@@ -1,0 +1,82 @@
+@page "/purchases"
+@attribute [Authorize(Policy = Permissions.PurchasesManage)]
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h3 class="fw-bold mb-0">Compras de Materias Primas</h3>
+        <small class="text-muted">Recepción de insumos con recálculo de Costo Promedio Ponderado (CPP) e ITBIS 18%</small>
+    </div>
+    <button class="btn btn-brand btn-sm" @onclick="OpenNewModal"><i class="bi bi-cart-plus me-1"></i> Registrar Compra</button>
+</div>
+
+<div class="card p-3">
+    <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+            <tr><th>Orden</th><th>Fecha</th><th>Suplidor</th><th>Pago</th><th>SubTotal</th><th>ITBIS</th><th>Total</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var po in _orders)
+            {
+                <tr>
+                    <td><code>@po.OrderNumber</code></td>
+                    <td>@po.PurchaseDate.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                    <td>@po.Supplier?.Name</td>
+                    <td>@po.PaymentMethod</td>
+                    <td>RD$ @po.SubTotal.ToString("N2")</td>
+                    <td>RD$ @po.TaxAmount.ToString("N2")</td>
+                    <td class="fw-bold">RD$ @po.Total.ToString("N2")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (_showModal)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.45);">
+        <div class="modal-dialog modal-lg"><div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Registrar Recepción de Compra</h5><button class="btn-close" @onclick="() => _showModal = false"></button></div>
+            <div class="modal-body">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small">Suplidor</label>
+                        <select class="form-select" @bind="_supplierId">
+                            @foreach (var s in _suppliers) { <option value="@s.Id">@s.Name</option> }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Condición de Pago</label>
+                        <select class="form-select" @bind="_paymentMethod">
+                            <option value="@PaymentMethod.Cash">Efectivo</option>
+                            <option value="@PaymentMethod.BankTransfer">Transferencia</option>
+                            <option value="@PaymentMethod.Credit">Crédito (CxP)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <strong class="small">Detalle de Materiales</strong>
+                    <button class="btn btn-sm btn-outline-primary" @onclick="AddLine">+ Línea</button>
+                </div>
+                @foreach (var line in _lines)
+                {
+                    <div class="row g-2 mb-2 align-items-center">
+                        <div class="col-md-5">
+                            <select class="form-select form-select-sm" @bind="line.RawMaterialId">
+                                @foreach (var m in _materials) { <option value="@m.Id">@m.Name (@UnitConverter.GetShortLabel(m.UnitOfMeasure))</option> }
+                            </select>
+                        </div>
+                        <div class="col-md-2"><input type="number" step="0.01" class="form-control form-control-sm" placeholder="Cant" @bind="line.Quantity" /></div>
+                        <div class="col-md-2"><input type="number" step="0.01" class="form-control form-control-sm" placeholder="Costo" @bind="line.UnitCost" /></div>
+                        <div class="col-md-2 form-check"><input type="checkbox" class="form-check-input" @bind="line.IsTaxable" /><label class="form-check-label small">ITBIS</label></div>
+                        <div class="col-md-1 text-end"><button class="btn btn-sm btn-outline-danger" @onclick="() => _lines.Remove(line)">×</button></div>
+                    </div>
+                }
+                <input class="form-control form-control-sm mt-2" placeholder="Notas de compra..." @bind="_notes" />
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="() => _showModal = false">Cancelar</button>
+                <button class="btn btn-brand" @onclick="SaveAsync">Recibir y Contabilizar</button>
+            </div>
+        </div></div>
+    </div>
+}

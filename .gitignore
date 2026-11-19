@@ -1,0 +1,30 @@
+# .NET / Visual Studio / VS Code
+bin/
+obj/
+out/
+.vs/
+.vscode/
+*.user
+*.suo
+*.cache
+*.log
+TestResults/
+coverage/
+
+# Secrets & Environment
+.env
+.env.*
+!.env.example
+appsettings.Production.json
+
+# Databases & Local Runtime State
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.bak
+backups/
+dataprotection-keys/
+src/FactoryERP.Web/dataprotection-keys/
+src/FactoryERP.Web/wwwroot/uploads/*
+!src/FactoryERP.Web/wwwroot/uploads/.gitkeep

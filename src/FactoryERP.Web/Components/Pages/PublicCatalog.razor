@@ -1,0 +1,100 @@
+@page "/catalogo"
+@layout PublicCatalogLayout
+@attribute [AllowAnonymous]
+
+@if (_profile is { PublicCatalogEnabled: false })
+{
+    <div class="alert alert-info text-center py-5">
+        <h4 class="fw-bold">Catálogo temporalmente no disponible</h4>
+        <p class="mb-0">Contáctanos directamente para conocer nuestras líneas capilares.</p>
+    </div>
+}
+else
+{
+    <div class="card p-4 mb-4 border-0 shadow-sm">
+        <div class="row align-items-center g-3">
+            <div class="col-md-8">
+                <h2 class="fw-bold mb-1">Catálogo Capilar — @(_profile?.BusinessName ?? "")</h2>
+                <p class="text-muted mb-0">@(_profile?.CatalogWelcomeMessage ?? "")</p>
+            </div>
+            <div class="col-md-4 text-md-end">
+                @if (_cart.Count > 0)
+                {
+                    <a href="@BuildWhatsAppUrl()" target="_blank" class="btn btn-success">
+                        <i class="bi bi-whatsapp me-1"></i> Pedir (@_cart.Values.Sum() uds)
+                    </a>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-2 mb-4">
+        <div class="col-md-6"><input class="form-control" placeholder="Buscar producto o ingrediente..." @bind="_search" @bind:after="LoadAsync" /></div>
+        <div class="col-md-3">
+            <select class="form-select" @bind="_selectedLine" @bind:after="LoadAsync">
+                <option value="">Todas las líneas</option>
+                @foreach (var line in _lines) { <option value="@line">@line</option> }
+            </select>
+        </div>
+        <div class="col-md-3 d-flex align-items-center">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="inStockOnly" @bind="_onlyInStock" @bind:after="LoadAsync" />
+                <label class="form-check-label small" for="inStockOnly">Solo disponibles</label>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        @foreach (var p in _items)
+        {
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 overflow-hidden">
+                    @if (!string.IsNullOrWhiteSpace(p.ImageUrl))
+                    {
+                        <img src="@p.ImageUrl" class="catalog-card-img" alt="@p.Name" />
+                    }
+                    else
+                    {
+                        <div class="catalog-card-img d-flex align-items-center justify-content-center text-brand">
+                            <i class="bi bi-stars display-4 opacity-50"></i>
+                        </div>
+                    }
+                    <div class="card-body d-flex flex-column">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="badge bg-secondary-subtle text-body">@p.Line • @p.Presentation</span>
+                            <span class="badge @(p.InStock ? "bg-success" : "bg-secondary")">@(p.InStock ? "Disponible" : "Bajo pedido")</span>
+                        </div>
+                        <h5 class="fw-bold mb-1">@p.Name</h5>
+                        <p class="small text-muted flex-grow-1">@p.Description</p>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="fs-5 fw-bold text-brand">RD$ @p.RetailPrice.ToString("N2")</span>
+                            @if (p.SalonPrice > 0) { <small class="text-muted">Salón: RD$ @p.SalonPrice.ToString("N0")</small> }
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-secondary flex-fill" @onclick="() => _detailItem = p">Detalles</button>
+                            <button class="btn btn-sm btn-brand flex-fill" @onclick="() => AddToCart(p.ProductId)">+ Agregar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@if (_detailItem != null)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog"><div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">@_detailItem.Name (@_detailItem.Presentation)</h5><button class="btn-close" @onclick="() => _detailItem = null"></button></div>
+            <div class="modal-body small">
+                <p>@_detailItem.Description</p>
+                @if (!string.IsNullOrWhiteSpace(_detailItem.Benefits)) { <p><strong>Beneficios:</strong> @_detailItem.Benefits</p> }
+                @if (!string.IsNullOrWhiteSpace(_detailItem.KeyIngredients)) { <p><strong>Ingredientes clave:</strong> @_detailItem.KeyIngredients</p> }
+                @if (!string.IsNullOrWhiteSpace(_detailItem.UsageInstructions)) { <p><strong>Modo de uso:</strong> @_detailItem.UsageInstructions</p> }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-brand btn-sm" @onclick="() => { AddToCart(_detailItem.ProductId); _detailItem = null; }">Agregar al pedido</button>
+            </div>
+        </div></div>
+    </div>
+}

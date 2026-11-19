@@ -1,0 +1,35 @@
+@page "/batches"
+@attribute [Authorize(Policy = Permissions.ProductionManage)]
+@inject IProductService ProductService
+
+<div class="mb-3">
+    <h3 class="fw-bold mb-0">Lotes Terminados (Trazabilidad FEFO)</h3>
+    <small class="text-muted">Existencias por lote, costo real unitario y fecha de vencimiento</small>
+</div>
+
+<div class="card p-3">
+    <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+            <tr><th>Lote</th><th>Producto</th><th>Fabricación</th><th>Vencimiento</th><th>Inicial</th><th>Disponible</th><th>Costo Unit.</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var b in _batches)
+            {
+                <tr class="@(b.QuantityRemaining == 0 ? "text-muted" : "")">
+                    <td><code>@b.BatchCode</code></td>
+                    <td class="fw-semibold">@b.Product?.Name</td>
+                    <td>@b.ProductionDate.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                    <td>@(b.ExpirationDate?.ToLocalTime().ToString("dd/MM/yyyy") ?? "N/A")</td>
+                    <td>@b.InitialQuantity</td>
+                    <td class="fw-bold">@b.QuantityRemaining</td>
+                    <td>RD$ @b.UnitCost.ToString("N2")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    private List<FinishedBatch> _batches = new();
+    protected override async Task OnInitializedAsync() => _batches = await ProductService.GetBatchesAsync();
+}

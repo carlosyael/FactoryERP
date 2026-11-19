@@ -1,0 +1,88 @@
+@inherits LayoutComponentBase
+@inject IBusinessProfileService BusinessProfileService
+@inject IJSRuntime JSRuntime
+@implements IDisposable
+
+@if (_profile != null)
+{
+    <PageTitle>@_profile.BusinessName — Catálogo</PageTitle>
+}
+
+<div class="min-vh-100 d-flex flex-column" style="@($"--brand-primary: {(_profile?.PrimaryColor ?? "#0f766e")}; background-color: var(--bg-body);")">
+    <header class="border-bottom py-3 px-4" style="background-color: var(--bg-surface);">
+        <div class="container d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="brand-logo shadow-sm">
+                    @if (!string.IsNullOrWhiteSpace(_profile?.LogoUrl))
+                    {
+                        <img src="@_profile.LogoUrl" alt="@_profile.BusinessName" />
+                    }
+                    else
+                    {
+                        <i class="bi bi-stars fs-5"></i>
+                    }
+                </div>
+                <div>
+                    <h5 class="mb-0 fw-bold">@(_profile?.BusinessName ?? "Catálogo")</h5>
+                    <small class="text-muted">@(_profile?.Tagline ?? "")</small>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ToggleThemeAsync">
+                    <i class="bi @(_isDark ? "bi-sun" : "bi-moon-stars")"></i>
+                </button>
+                <AuthorizeView>
+                    <Authorized>
+                        <a href="/" class="btn btn-sm btn-brand">Ir al ERP</a>
+                    </Authorized>
+                    <NotAuthorized>
+                        <a href="/login" class="btn btn-sm btn-outline-secondary">Acceso Interno</a>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow-1 py-4">
+        <div class="container">@Body</div>
+    </main>
+
+    <footer class="border-top py-3 text-center small text-muted" style="background-color: var(--bg-surface);">
+        <div class="container">
+            <strong>@(_profile?.BusinessName ?? "")</strong>
+            @if (!string.IsNullOrWhiteSpace(_profile?.Phone)) { <span class="ms-2">• Tel: @_profile.Phone</span> }
+            @if (!string.IsNullOrWhiteSpace(_profile?.Address)) { <span class="ms-2">• @_profile.Address</span> }
+        </div>
+    </footer>
+</div>
+
+@code {
+    private BusinessProfileDto? _profile;
+    private bool _isDark;
+
+    protected override async Task OnInitializedAsync()
+    {
+        BusinessProfileService.OnProfileChanged += HandleProfileChanged;
+        _profile = await BusinessProfileService.GetProfileAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try { _isDark = await JSRuntime.InvokeAsync<string>("getTheme") == "dark"; StateHasChanged(); } catch { }
+    }
+
+    private void HandleProfileChanged() => InvokeAsync(async () =>
+    {
+        _profile = await BusinessProfileService.GetProfileAsync();
+        StateHasChanged();
+    });
+
+    private async Task ToggleThemeAsync()
+    {
+        _isDark = !_isDark;
+        await JSRuntime.InvokeVoidAsync("setTheme", _isDark ? "dark" : "light");
+    }
+
+    public void Dispose() => BusinessProfileService.OnProfileChanged -= HandleProfileChanged;
+}

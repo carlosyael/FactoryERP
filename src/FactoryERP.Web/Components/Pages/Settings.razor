@@ -1,0 +1,118 @@
+@page "/settings"
+@attribute [Authorize(Policy = Permissions.SettingsManage)]
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold mb-0">Configuración del Comercio</h3>
+        <small class="text-muted">Personaliza la identidad white-label, parámetros fiscales y reglas de producción</small>
+    </div>
+    <button type="button" class="btn btn-brand" @onclick="SaveAsync" disabled="@_saving">
+        <i class="bi bi-check2-circle me-1"></i> Guardar Cambios
+    </button>
+</div>
+
+@if (_model != null)
+{
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card p-4 h-100">
+                <h5 class="fw-bold mb-3"><i class="bi bi-building me-2 text-brand"></i>Identidad del Comercio</h5>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Nombre del Comercio</label>
+                    <input class="form-control" @bind="_model.BusinessName" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Slogan / Subtítulo</label>
+                    <input class="form-control" @bind="_model.Tagline" />
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">RNC / Cédula</label>
+                        <input class="form-control" @bind="_model.Rnc" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Color de Marca</label>
+                        <input type="color" class="form-control form-control-color w-100" @bind="_model.PrimaryColor" />
+                    </div>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Teléfono</label>
+                        <input class="form-control" @bind="_model.Phone" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">WhatsApp Pedidos (ej. 18095551234)</label>
+                        <input class="form-control" @bind="_model.WhatsAppNumber" />
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Correo Electrónico</label>
+                    <input class="form-control" @bind="_model.Email" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Dirección</label>
+                    <textarea class="form-control" rows="2" @bind="_model.Address"></textarea>
+                </div>
+                <div>
+                    <label class="form-label small fw-semibold">Logo del Comercio (JPG/PNG/WEBP máx. 5 MB)</label>
+                    <InputFile class="form-control mb-2" OnChange="OnLogoUploadAsync" accept=".jpg,.jpeg,.png,.webp" />
+                    <input class="form-control form-control-sm" @bind="_model.LogoUrl" placeholder="O pegue URL pública del logo" />
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 d-flex flex-column gap-4">
+            <div class="card p-4">
+                <h5 class="fw-bold mb-3"><i class="bi bi-cash-coin me-2 text-brand"></i>Fiscal y Comercial</h5>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold">Moneda</label>
+                        <input class="form-control" @bind="_model.CurrencySymbol" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold">ITBIS (0.18 = 18%)</label>
+                        <input type="number" step="0.01" class="form-control" @bind="_model.DefaultTaxRate" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold">Desc. Máximo (%)</label>
+                        <input type="number" step="1" class="form-control" @bind="_model.MaxDiscountPercentage" />
+                    </div>
+                </div>
+                <div class="alert alert-warning py-2 small mb-0">
+                    <i class="bi bi-info-circle me-1"></i>
+                    <strong>Facturación Electrónica (DGII e-CF):</strong> @TaxDocumentProvider.StatusDescription
+                </div>
+            </div>
+
+            <div class="card p-4">
+                <h5 class="fw-bold mb-3"><i class="bi bi-flask me-2 text-brand"></i>Producción y Catálogo Público</h5>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Merma Estándar por Defecto (%)</label>
+                        <input type="number" step="0.5" class="form-control" @bind="_model.DefaultLossMarginPercent" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Tolerancia Merma Anormal (%)</label>
+                        <input type="number" step="0.5" class="form-control" @bind="_model.AbnormalLossTolerancePercent" />
+                    </div>
+                </div>
+                <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="pubCatSwitch" @bind="_model.PublicCatalogEnabled" />
+                    <label class="form-check-label fw-semibold" for="pubCatSwitch">Habilitar Catálogo Público Compartible (/catalogo)</label>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Mensaje de Bienvenida del Catálogo</label>
+                    <textarea class="form-control" rows="2" @bind="_model.CatalogWelcomeMessage"></textarea>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CopyPublicUrlAsync">
+                        <i class="bi bi-clipboard me-1"></i> Copiar enlace público
+                    </button>
+                    <a href="/catalogo" target="_blank" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-box-arrow-up-right me-1"></i> Abrir catálogo
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+}

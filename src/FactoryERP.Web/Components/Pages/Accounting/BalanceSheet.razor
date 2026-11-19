@@ -1,0 +1,62 @@
+@page "/accounting/balance-sheet"
+@attribute [Authorize(Policy = Permissions.ReportsView)]
+@inject IFinancialReportService ReportService
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div>
+        <h3 class="fw-bold mb-0">Balance General</h3>
+        <small class="text-muted">Ecuación Contable: Activo = Pasivo + Capital</small>
+    </div>
+    <div class="d-flex gap-2">
+        <input type="date" class="form-control form-control-sm" @bind="_asOfDate" />
+        <button class="btn btn-brand btn-sm" @onclick="LoadAsync">Consultar</button>
+    </div>
+</div>
+
+@if (_data != null)
+{
+    <div class="alert @(_data.IsBalanced ? "alert-success" : "alert-danger") py-2 small">
+        Ecuación Contable: Activo (RD$ @_data.TotalAssets.ToString("N2")) = Pasivo + Capital (RD$ @((_data.TotalLiabilities + _data.TotalEquity).ToString("N2")))
+    </div>
+    <div class="row g-3">
+        <div class="col-md-4">
+            <div class="card p-3 h-100">
+                <h6 class="fw-bold border-bottom pb-2">Activos</h6>
+                @foreach (var l in _data.AssetLines)
+                {
+                    <div class="d-flex justify-content-between small py-1"><span>@l.Code @l.Name</span><span>RD$ @l.Amount.ToString("N2")</span></div>
+                }
+                <div class="d-flex justify-content-between fw-bold border-top pt-2 mt-auto"><span>Total Activos</span><span>RD$ @_data.TotalAssets.ToString("N2")</span></div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card p-3 h-100">
+                <h6 class="fw-bold border-bottom pb-2">Pasivos</h6>
+                @foreach (var l in _data.LiabilityLines)
+                {
+                    <div class="d-flex justify-content-between small py-1"><span>@l.Code @l.Name</span><span>RD$ @l.Amount.ToString("N2")</span></div>
+                }
+                <div class="d-flex justify-content-between fw-bold border-top pt-2 mt-auto"><span>Total Pasivos</span><span>RD$ @_data.TotalLiabilities.ToString("N2")</span></div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card p-3 h-100">
+                <h6 class="fw-bold border-bottom pb-2">Patrimonio</h6>
+                @foreach (var l in _data.EquityLines)
+                {
+                    <div class="d-flex justify-content-between small py-1"><span>@l.Code @l.Name</span><span>RD$ @l.Amount.ToString("N2")</span></div>
+                }
+                <div class="d-flex justify-content-between small py-1"><span>Resultado del Ejercicio</span><span>RD$ @_data.CurrentPeriodEarnings.ToString("N2")</span></div>
+                <div class="d-flex justify-content-between fw-bold border-top pt-2 mt-auto"><span>Total Patrimonio</span><span>RD$ @_data.TotalEquity.ToString("N2")</span></div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private DateTime _asOfDate = DateTime.Today;
+    private BalanceSheetDto? _data;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+    private async Task LoadAsync() => _data = await ReportService.GetBalanceSheetAsync(_asOfDate);
+}

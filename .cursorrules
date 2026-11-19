@@ -1,0 +1,20 @@
+# AI Native Engineering Rules — FactoryERP
+
+Consulte `AGENTS.md` para la arquitectura completa, rutas clave y reglas de despliegue en Azure.
+
+## 1. TDD Obligatorio (Test-First)
+- **RED:** Escribir primero la prueba en `src/FactoryERP.Tests/` que valide la regla o contrato esperado.
+- **GREEN:** Implementar el código mínimo necesario en `FactoryERP.Core` / `FactoryERP.Infrastructure`.
+- **REFACTOR:** Aplicar Clean Code / SOLID manteniendo ≤ 200 líneas por archivo y `100%` de tests aprobados.
+
+## 2. Clean Code & SRP
+- Máximo **150–200 líneas** por archivo de servicio o componente `.razor`.
+- Usar `record` para DTOs y contratos de entrada/salida.
+- Programar siempre contra interfaces definidas en `FactoryERP.Core/Interfaces/`.
+- Nunca acceder a `AppDbContext` desde componentes Blazor.
+
+## 3. Reglas de Negocio del Dominio
+- **Moneda e Impuesto:** República Dominicana (`RD$`, cultura `es-DO`) e **ITBIS 18%**.
+- **Facturación Electrónica DGII:** Desacoplada mediante `ITaxDocumentProvider` (actualmente marcada como *Pendiente de implementación* hasta fase fiscal).
+- **White-Label:** Toda identidad comercial (nombre, logo, color, contacto, WhatsApp) proviene de `IBusinessProfileService` / `SystemSettings`.
+- **Manufactura Capilar:** Calcular materiales escalados, costo estimado, margen de pérdida estándar/esperado, merma real al cierre (normal vs anormal bajo NIC 2) y costo unitario real resultante por lote.

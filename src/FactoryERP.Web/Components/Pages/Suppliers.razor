@@ -1,0 +1,82 @@
+@page "/suppliers"
+@attribute [Authorize(Policy = Permissions.PurchasesManage)]
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h3 class="fw-bold mb-0">Suplidores y Cuentas por Pagar</h3>
+        <small class="text-muted">Proveedores de químicos, aceites y envases</small>
+    </div>
+    <button class="btn btn-brand btn-sm" @onclick="OpenNewModal"><i class="bi bi-plus-lg me-1"></i> Nuevo Suplidor</button>
+</div>
+
+<div class="card p-3">
+    <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+            <tr>
+                <th>Suplidor</th><th>RNC</th><th>Teléfono</th><th>Contacto</th><th>Balance CxP</th><th class="text-end">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var s in _suppliers)
+            {
+                <tr>
+                    <td class="fw-semibold">@s.Name</td>
+                    <td>@s.Rnc</td>
+                    <td>@s.Phone</td>
+                    <td>@s.ContactPerson</td>
+                    <td class="fw-bold @(s.CurrentBalance > 0 ? "text-danger" : "text-success")">RD$ @s.CurrentBalance.ToString("N2")</td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => OpenEditModal(s)"><i class="bi bi-pencil"></i></button>
+                        @if (s.CurrentBalance > 0)
+                        {
+                            <button class="btn btn-sm btn-outline-success" @onclick="() => OpenPayModal(s)">Abonar</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (_showForm)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.45);">
+        <div class="modal-dialog"><div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Suplidor</h5><button class="btn-close" @onclick="() => _showForm = false"></button></div>
+            <div class="modal-body">
+                <div class="mb-2"><label class="form-label small">Nombre</label><input class="form-control" @bind="_editing.Name" /></div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6"><label class="form-label small">RNC</label><input class="form-control" @bind="_editing.Rnc" /></div>
+                    <div class="col-6"><label class="form-label small">Teléfono</label><input class="form-control" @bind="_editing.Phone" /></div>
+                </div>
+                <div class="mb-2"><label class="form-label small">Contacto</label><input class="form-control" @bind="_editing.ContactPerson" /></div>
+                <div><label class="form-label small">Dirección</label><input class="form-control" @bind="_editing.Address" /></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="() => _showForm = false">Cancelar</button>
+                <button class="btn btn-brand" @onclick="SaveAsync">Guardar</button>
+            </div>
+        </div></div>
+    </div>
+}
+
+@if (_showPay && _payTarget != null)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.45);">
+        <div class="modal-dialog modal-sm"><div class="modal-content">
+            <div class="modal-header"><h6 class="modal-title">Pagar a @_payTarget.Name</h6><button class="btn-close" @onclick="() => _showPay = false"></button></div>
+            <div class="modal-body">
+                <label class="form-label small">Monto (RD$)</label>
+                <input type="number" step="0.01" class="form-control mb-2" @bind="_payAmount" />
+                <label class="form-label small">Método</label>
+                <select class="form-select mb-2" @bind="_payMethod">
+                    <option value="@PaymentMethod.BankTransfer">Transferencia</option>
+                    <option value="@PaymentMethod.Cash">Efectivo</option>
+                </select>
+                <label class="form-label small">Referencia</label>
+                <input class="form-control" @bind="_payRef" />
+            </div>
+            <div class="modal-footer"><button class="btn btn-brand btn-sm" @onclick="ConfirmPayAsync">Registrar Pago</button></div>
+        </div></div>
+    </div>
+}

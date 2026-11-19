@@ -1,0 +1,93 @@
+@page "/"
+@attribute [Authorize(Policy = Permissions.DashboardView)]
+@inject IDashboardService DashboardService
+@inject IBusinessProfileService BusinessProfileService
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <div>
+        <h3 class="fw-bold mb-0">Panel Principal</h3>
+        <small class="text-muted">Resumen operativo de @(_profile?.BusinessName ?? "la empresa")</small>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/production" class="btn btn-brand btn-sm"><i class="bi bi-gear-wide-connected me-1"></i> Nueva Producción</a>
+        <a href="/sales" class="btn btn-outline-secondary btn-sm"><i class="bi bi-receipt me-1"></i> Nueva Venta</a>
+        <a href="/catalogo" target="_blank" class="btn btn-outline-secondary btn-sm"><i class="bi bi-shop me-1"></i> Catálogo Público</a>
+    </div>
+</div>
+
+@if (_kpis == null)
+{
+    <div class="text-center py-5"><div class="spinner-border text-brand"></div></div>
+}
+else
+{
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card p-3 h-100">
+                <small class="text-muted">Ventas del Mes</small>
+                <h4 class="fw-bold text-brand mt-1 mb-0">RD$ @_kpis.MonthlySalesTotal.ToString("N2")</h4>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3 h-100">
+                <small class="text-muted">Inventario Materias Primas</small>
+                <h4 class="fw-bold mt-1 mb-0">RD$ @_kpis.RawMaterialInventoryValue.ToString("N2")</h4>
+                <small class="text-muted">Alertas stock bajo: @_kpis.LowStockRawMaterialsCount</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3 h-100">
+                <small class="text-muted">Inventario Terminado</small>
+                <h4 class="fw-bold mt-1 mb-0">RD$ @_kpis.FinishedInventoryValue.ToString("N2")</h4>
+                <small class="text-muted">Productos activos: @_kpis.ActiveProductsCount</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3 h-100">
+                <small class="text-muted">Merma Promedio Real</small>
+                <h4 class="fw-bold mt-1 mb-0">@_kpis.AverageActualLossPercent.ToString("N2")%</h4>
+                <small class="text-muted">Órdenes activas: @_kpis.ActiveProductionOrdersCount</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-6">
+            <div class="card p-3">
+                <h6 class="fw-bold mb-3">Cartera Financiera</h6>
+                <div class="d-flex justify-content-between py-2 border-bottom">
+                    <span>Cuentas por Cobrar (Clientes)</span>
+                    <strong class="text-success">RD$ @_kpis.TotalAccountsReceivable.ToString("N2")</strong>
+                </div>
+                <div class="d-flex justify-content-between py-2">
+                    <span>Cuentas por Pagar (Suplidores)</span>
+                    <strong class="text-danger">RD$ @_kpis.TotalAccountsPayable.ToString("N2")</strong>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card p-3">
+                <h6 class="fw-bold mb-3">Accesos Rápidos</h6>
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="/raw-materials" class="btn btn-sm btn-outline-secondary">Materias Primas</a>
+                    <a href="/formulas" class="btn btn-sm btn-outline-secondary">Fórmulas Capilares</a>
+                    <a href="/catalog" class="btn btn-sm btn-outline-secondary">Catálogo Interno</a>
+                    <a href="/customers" class="btn btn-sm btn-outline-secondary">Clientes y CxC</a>
+                    <a href="/accounting/income-statement" class="btn btn-sm btn-outline-secondary">Estado de Resultados</a>
+                    <a href="/settings" class="btn btn-sm btn-outline-secondary">Configurar Comercio</a>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private DashboardKpiDto? _kpis;
+    private BusinessProfileDto? _profile;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _profile = await BusinessProfileService.GetProfileAsync();
+        _kpis = await DashboardService.GetKpisAsync();
+    }
+}

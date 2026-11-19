@@ -1,0 +1,59 @@
+@page "/accounting/trial-balance"
+@attribute [Authorize(Policy = Permissions.ReportsView)]
+@inject IFinancialReportService ReportService
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div>
+        <h3 class="fw-bold mb-0">Balanza de Comprobación</h3>
+        <small class="text-muted">Sumas y saldos de cuentas mayorizadas</small>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+        <input type="date" class="form-control form-control-sm" @bind="_startDate" />
+        <input type="date" class="form-control form-control-sm" @bind="_endDate" />
+        <button class="btn btn-brand btn-sm" @onclick="LoadAsync">Consultar</button>
+    </div>
+</div>
+
+@if (_data != null)
+{
+    <div class="alert @(_data.IsBalanced ? "alert-success" : "alert-danger") py-2 small">
+        Estado del cuadre: <strong>@(_data.IsBalanced ? "CUADRADA (Débito == Crédito)" : "DESCUADRADA")</strong>
+    </div>
+    <div class="card p-3">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr><th>Código</th><th>Cuenta</th><th class="text-end">Débitos</th><th class="text-end">Créditos</th><th class="text-end">Saldo Deudor</th><th class="text-end">Saldo Acreedor</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _data.Rows)
+                {
+                    <tr>
+                        <td><code>@r.Code</code></td><td>@r.Name</td>
+                        <td class="text-end">RD$ @r.TotalDebit.ToString("N2")</td>
+                        <td class="text-end">RD$ @r.TotalCredit.ToString("N2")</td>
+                        <td class="text-end">RD$ @r.DebitBalance.ToString("N2")</td>
+                        <td class="text-end">RD$ @r.CreditBalance.ToString("N2")</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot class="fw-bold table-light">
+                <tr>
+                    <td colspan="2">TOTALES</td>
+                    <td class="text-end">RD$ @_data.TotalDebit.ToString("N2")</td>
+                    <td class="text-end">RD$ @_data.TotalCredit.ToString("N2")</td>
+                    <td class="text-end">RD$ @_data.TotalDebitBalance.ToString("N2")</td>
+                    <td class="text-end">RD$ @_data.TotalCreditBalance.ToString("N2")</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+}
+
+@code {
+    private DateTime _startDate = new(DateTime.Today.Year, 1, 1);
+    private DateTime _endDate = DateTime.Today;
+    private TrialBalanceDto? _data;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+    private async Task LoadAsync() => _data = await ReportService.GetTrialBalanceAsync(_startDate, _endDate);
+}

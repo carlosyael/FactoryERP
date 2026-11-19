@@ -1,0 +1,39 @@
+@page "/roles"
+@attribute [Authorize(Policy = Permissions.UsersManage)]
+@using Microsoft.AspNetCore.Identity
+@inject RoleManager<IdentityRole> RoleManager
+
+<div class="mb-3">
+    <h3 class="fw-bold mb-0">Roles y Permisos</h3>
+    <small class="text-muted">Matriz de autorización por claims del sistema</small>
+</div>
+
+<div class="row g-3">
+    @foreach (var (role, claims) in _roleClaims)
+    {
+        <div class="col-md-6">
+            <div class="card p-3 h-100">
+                <h6 class="fw-bold text-brand mb-2">@role</h6>
+                <div class="d-flex flex-wrap gap-1">
+                    @foreach (var perm in claims)
+                    {
+                        <span class="badge bg-secondary-subtle text-body">@perm</span>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private readonly Dictionary<string, List<string>> _roleClaims = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        foreach (var role in RoleManager.Roles.OrderBy(r => r.Name).ToList())
+        {
+            var claims = await RoleManager.GetClaimsAsync(role);
+            _roleClaims[role.Name ?? ""] = claims.Where(c => c.Type == "Permission").Select(c => c.Value).OrderBy(v => v).ToList();
+        }
+    }
+}

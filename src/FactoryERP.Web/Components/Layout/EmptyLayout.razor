@@ -1,0 +1,16 @@
+@inherits LayoutComponentBase
+@inject IBusinessProfileService BusinessProfileService
+
+@if (_profile != null)
+{
+    <PageTitle>@_profile.BusinessName — Acceso</PageTitle>
+}
+
+<div class="min-vh-100" style="@($"--brand-primary: {(_profile?.PrimaryColor ?? "#0f766e")}; background-color: var(--bg-body);")">
+    @Body
+</div>
+
+@code {
+    private BusinessProfileDto? _profile;
+    protected override async Task OnInitializedAsync() => _profile = await BusinessProfileService.GetProfileAsync();
+}

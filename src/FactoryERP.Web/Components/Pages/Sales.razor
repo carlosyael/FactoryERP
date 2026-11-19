@@ -1,0 +1,120 @@
+@page "/sales"
+@attribute [Authorize(Policy = Permissions.SalesManage)]
+
+<div class="d-flex justify-content-between align-items-center mb-3 no-print">
+    <div>
+        <h3 class="fw-bold mb-0">Pedidos y Ventas</h3>
+        <small class="text-muted">Facturación comercial con precios por segmento, FEFO e ITBIS 18%</small>
+    </div>
+    <button class="btn btn-brand btn-sm" @onclick="OpenNewModal"><i class="bi bi-plus-lg me-1"></i> Nueva Venta</button>
+</div>
+
+<div class="card p-3 no-print">
+    <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+            <tr><th>Comprobante</th><th>Fecha</th><th>Cliente</th><th>Pago</th><th>SubTotal</th><th>ITBIS</th><th>Total</th><th>e-CF</th><th class="text-end">Ver</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var s in _sales)
+            {
+                <tr>
+                    <td><code>@s.SaleNumber</code></td>
+                    <td>@s.SaleDate.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                    <td>@s.Customer?.Name</td>
+                    <td>@s.PaymentMethod</td>
+                    <td>RD$ @s.SubTotal.ToString("N2")</td>
+                    <td>RD$ @s.TaxAmount.ToString("N2")</td>
+                    <td class="fw-bold">RD$ @s.Total.ToString("N2")</td>
+                    <td><span class="badge bg-secondary">Pend. impl.</span></td>
+                    <td class="text-end"><button class="btn btn-sm btn-outline-primary" @onclick="() => _selectedSale = s">Recibo</button></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (_showNewModal)
+{
+    <div class="modal fade show d-block no-print" style="background: rgba(0,0,0,0.45);">
+        <div class="modal-dialog modal-lg"><div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Nueva Venta</h5><button class="btn-close" @onclick="() => _showNewModal = false"></button></div>
+            <div class="modal-body">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small">Cliente</label>
+                        <select class="form-select" @bind="_customerId">
+                            @foreach (var c in _customers) { <option value="@c.Id">@c.Name (@c.CustomerType)</option> }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Método de Pago</label>
+                        <select class="form-select" @bind="_paymentMethod">
+                            <option value="@PaymentMethod.Cash">Efectivo</option>
+                            <option value="@PaymentMethod.BankTransfer">Transferencia</option>
+                            <option value="@PaymentMethod.Card">Tarjeta</option>
+                            <option value="@PaymentMethod.Credit">Crédito (CxC)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <strong class="small">Productos</strong>
+                    <button class="btn btn-sm btn-outline-primary" @onclick="AddLine">+ Producto</button>
+                </div>
+                @foreach (var line in _lines)
+                {
+                    <div class="row g-2 mb-2 align-items-center">
+                        <div class="col-md-6">
+                            <select class="form-select form-select-sm" @bind="line.ProductId">
+                                @foreach (var p in _products) { <option value="@p.Id">@p.Name (Stock: @p.FinishedBatches.Sum(b => b.QuantityRemaining))</option> }
+                            </select>
+                        </div>
+                        <div class="col-md-2"><input type="number" class="form-control form-control-sm" placeholder="Cant" @bind="line.Quantity" /></div>
+                        <div class="col-md-3"><input type="number" step="0.5" class="form-control form-control-sm" placeholder="Desc %" @bind="line.DiscountPercent" /></div>
+                        <div class="col-md-1 text-end"><button class="btn btn-sm btn-outline-danger" @onclick="() => _lines.Remove(line)">×</button></div>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="() => _showNewModal = false">Cancelar</button>
+                <button class="btn btn-brand" @onclick="SaveSaleAsync">Confirmar Venta</button>
+            </div>
+        </div></div>
+    </div>
+}
+
+@if (_selectedSale != null)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.45);">
+        <div class="modal-dialog"><div class="modal-content">
+            <div class="modal-header no-print"><h6 class="modal-title">Comprobante @_selectedSale.SaleNumber</h6><button class="btn-close" @onclick="() => _selectedSale = null"></button></div>
+            <div class="modal-body small">
+                <div class="text-center border-bottom pb-2 mb-2">
+                    <strong class="fs-6">@(_profile?.BusinessName ?? "")</strong>
+                    @if (!string.IsNullOrWhiteSpace(_profile?.Rnc)) { <div>RNC: @_profile.Rnc</div> }
+                    <div>@_profile?.Address • @_profile?.Phone</div>
+                </div>
+                <div><strong>Comprobante:</strong> @_selectedSale.SaleNumber</div>
+                <div><strong>Cliente:</strong> @_selectedSale.Customer?.Name</div>
+                <div class="mb-2"><strong>Fecha:</strong> @_selectedSale.SaleDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+                <table class="table table-sm">
+                    <thead><tr><th>Producto</th><th>Cant</th><th class="text-end">Total</th></tr></thead>
+                    <tbody>
+                        @foreach (var item in _selectedSale.Items)
+                        {
+                            <tr><td>@item.Product?.Name</td><td>@item.Quantity</td><td class="text-end">RD$ @item.LineTotal.ToString("N2")</td></tr>
+                        }
+                    </tbody>
+                </table>
+                <div class="text-end">
+                    <div>SubTotal: RD$ @_selectedSale.SubTotal.ToString("N2")</div>
+                    <div>ITBIS (18%): RD$ @_selectedSale.TaxAmount.ToString("N2")</div>
+                    <div class="fs-6 fw-bold">Total: RD$ @_selectedSale.Total.ToString("N2")</div>
+                </div>
+            </div>
+            <div class="modal-footer no-print">
+                <button class="btn btn-outline-secondary btn-sm" @onclick="PrintReceiptAsync">Imprimir</button>
+                <button class="btn btn-brand btn-sm" @onclick="() => _selectedSale = null">Cerrar</button>
+            </div>
+        </div></div>
+    </div>
+}

@@ -1,0 +1,74 @@
+using CurrieTechnologies.Razor.SweetAlert2;
+using FactoryERP.Core.Entities;
+using FactoryERP.Core.Enums;
+using FactoryERP.Core.Interfaces;
+using FactoryERP.Core.Models;
+using Microsoft.AspNetCore.Components;
+using Microsoft.JSInterop;
+
+namespace FactoryERP.Web.Components.Pages;
+
+public partial class Sales
+{
+    [Inject] private ISaleService SaleService { get; set; } = default!;
+    [Inject] private ICustomerService CustomerService { get; set; } = default!;
+    [Inject] private IProductService ProductService { get; set; } = default!;
+    [Inject] private IBusinessProfileService BusinessProfileService { get; set; } = default!;
+    [Inject] private SweetAlertService Swal { get; set; } = default!;
+    [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
+
+    private BusinessProfileDto? _profile;
+    private List<Sale> _sales = new();
+    private List<Customer> _customers = new();
+    private List<Product> _products = new();
+    private Sale? _selectedSale;
+    private bool _showNewModal;
+    private int _customerId;
+    private PaymentMethod _paymentMethod = PaymentMethod.Cash;
+    private List<EditableSaleLine> _lines = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _profile = await BusinessProfileService.GetProfileAsync();
+        _sales = await SaleService.GetAllAsync();
+        _customers = await CustomerService.GetAllAsync();
+        _products = await ProductService.GetAllAsync();
+    }
+
+    private void OpenNewModal()
+    {
+        _customerId = _customers.FirstOrDefault()?.Id ?? 0;
+        _lines = _products.Count > 0 ? [new() { ProductId = _products[0].Id, Quantity = 1 }] : [];
+        _showNewModal = true;
+    }
+
+    private void AddLine()
+    {
+        if (_products.Count > 0) _lines.Add(new() { ProductId = _products[0].Id, Quantity = 1 });
+    }
+
+    private async Task SaveSaleAsync()
+    {
+        try
+        {
+            var req = new CreateSaleRequest(
+                _customerId, _paymentMethod, DateTime.UtcNow, "",
+                _lines.Select(l => new CreateSaleItemRequest(l.ProductId, l.Quantity, null, l.DiscountPercent)).ToList());
+            _selectedSale = await SaleService.CreateSaleAsync(req);
+            _showNewModal = false;
+            _sales = await SaleService.GetAllAsync();
+            _products = await ProductService.GetAllAsync();
+            await Swal.FireAsync("Venta completada", $"Comprobante {_selectedSale.SaleNumber} emitido.", SweetAlertIcon.Success);
+        }
+        catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
+    }
+
+    private async Task PrintReceiptAsync() => await JSRuntime.InvokeVoidAsync("printPage");
+
+    private sealed class EditableSaleLine
+    {
+        public int ProductId { get; set; }
+        public int Quantity { get; set; } = 1;
+        public decimal DiscountPercent { get; set; }
+    }
+}

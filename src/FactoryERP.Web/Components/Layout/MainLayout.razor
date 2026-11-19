@@ -1,0 +1,73 @@
+@inherits LayoutComponentBase
+@inject IBusinessProfileService BusinessProfileService
+@implements IDisposable
+
+<GlobalLoadingOverlay />
+
+@if (_profile != null)
+{
+    <PageTitle>@_profile.BusinessName — ERP</PageTitle>
+}
+
+<div class="page" style="@($"--brand-primary: {(_profile?.PrimaryColor ?? "#0f766e")};")">
+    <div class="sidebar no-print">
+        <div class="sidebar-header">
+            <div class="brand-logo shadow-sm">
+                @if (!string.IsNullOrWhiteSpace(_profile?.LogoUrl))
+                {
+                    <img src="@_profile.LogoUrl" alt="@_profile.BusinessName" />
+                }
+                else
+                {
+                    <i class="bi bi-stars fs-5"></i>
+                }
+            </div>
+            <div class="d-flex flex-column text-truncate">
+                <span class="brand-name text-truncate">@(_profile?.BusinessName ?? "ERP")</span>
+                <span class="brand-subtitle text-truncate">@(_profile?.Tagline ?? "")</span>
+            </div>
+        </div>
+        <NavMenu />
+    </div>
+
+    <main class="main-content">
+        <div class="container-fluid px-4 py-3">
+            <ErrorBoundary @ref="_errorBoundary">
+                <ChildContent>
+                    @Body
+                </ChildContent>
+                <ErrorContent Context="ex">
+                    <div class="alert alert-danger shadow-sm border-0 text-center py-4 my-3 rounded-3">
+                        <i class="bi bi-exclamation-triangle-fill text-danger fs-2 mb-2 d-block"></i>
+                        <h5 class="fw-bold">Ocurrió un error al procesar la vista</h5>
+                        <p class="small text-muted mb-3">@ex.Message</p>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => _errorBoundary?.Recover()">
+                            Reintentar
+                        </button>
+                    </div>
+                </ErrorContent>
+            </ErrorBoundary>
+        </div>
+    </main>
+</div>
+
+@code {
+    private ErrorBoundary? _errorBoundary;
+    private BusinessProfileDto? _profile;
+
+    protected override async Task OnInitializedAsync()
+    {
+        BusinessProfileService.OnProfileChanged += HandleProfileChanged;
+        _profile = await BusinessProfileService.GetProfileAsync();
+    }
+
+    protected override void OnParametersSet() => _errorBoundary?.Recover();
+
+    private void HandleProfileChanged() => InvokeAsync(async () =>
+    {
+        _profile = await BusinessProfileService.GetProfileAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => BusinessProfileService.OnProfileChanged -= HandleProfileChanged;
+}

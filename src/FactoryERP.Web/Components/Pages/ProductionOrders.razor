@@ -1,0 +1,119 @@
+@page "/production"
+@attribute [Authorize(Policy = Permissions.ProductionManage)]
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h3 class="fw-bold mb-0">Órdenes de Preparación y Fabricación</h3>
+        <small class="text-muted">Simula materiales, controla mermas y registra la cantidad resultante por lote</small>
+    </div>
+    <button class="btn btn-brand btn-sm" @onclick="OpenCreateModal"><i class="bi bi-plus-lg me-1"></i> Nueva Orden</button>
+</div>
+
+<div class="card p-3">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Orden / Lote</th><th>Producto</th><th>Plan / Esp.</th><th>Resultante Real</th><th>Merma Real</th><th>Costo Unit. Real</th><th>Estado</th><th class="text-end">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var o in _orders)
+                {
+                    <tr>
+                        <td>
+                            <strong>@o.OrderNumber</strong>
+                            <div class="small text-muted">Lote: @o.BatchCode</div>
+                        </td>
+                        <td>@o.Product?.Name</td>
+                        <td>@o.PlannedQuantity / @o.ExpectedResultingQuantity uds (@o.ExpectedLossMarginPercent.ToString("N1")%)</td>
+                        <td>@(o.ActualYieldQuantity?.ToString() ?? "-") uds</td>
+                        <td>@(o.ActualLossPercent.HasValue ? $"{o.ActualLossPercent:N2}% ({o.ActualLossQuantity} uds)" : "-")</td>
+                        <td>@(o.ActualUnitCost > 0 ? $"RD$ {o.ActualUnitCost:N2}" : "-")</td>
+                        <td><span class="badge @GetStatusBadge(o.Status)">@o.Status</span></td>
+                        <td class="text-end">
+                            @if (o.Status == ProductionOrderStatus.Draft)
+                            {
+                                <button class="btn btn-sm btn-success me-1" @onclick="() => StartAsync(o.Id)">Iniciar</button>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelAsync(o.Id)">Cancelar</button>
+                            }
+                            else if (o.Status == ProductionOrderStatus.InProgress)
+                            {
+                                <button class="btn btn-sm btn-brand me-1" @onclick="() => OpenCompleteModal(o)">Completar</button>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelAsync(o.Id)">Cancelar</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (_showCreate)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.45);">
+        <div class="modal-dialog modal-lg"><div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Planificar Orden de Fabricación</h5><button class="btn-close" @onclick="() => _showCreate = false"></button></div>
+            <div class="modal-body">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-5">
+                        <label class="form-label small">Fórmula</label>
+                        <select class="form-select" @bind="_selectedFormulaId">
+                            @foreach (var f in _formulas) { <option value="@f.Id">@f.Product?.Name - @f.Name (v@f.Version)</option> }
+                        </select>
+                    </div>
+                    <div class="col-md-3"><label class="form-label small">Cant. a Producir</label><input type="number" class="form-control" @bind="_plannedQuantity" /></div>
+                    <div class="col-md-2"><label class="form-label small">Merma (%)</label><input type="number" step="0.5" class="form-control" @bind="_lossMargin" /></div>
+                    <div class="col-md-2 d-flex align-items-end"><button class="btn btn-outline-primary w-100" @onclick="SimulateAsync">Simular</button></div>
+                </div>
+                @if (_simulation != null)
+                {
+                    <div class="alert @(_simulation.CanProduce ? "alert-success" : "alert-danger") py-2 small">
+                        <strong>Resultante esperado:</strong> @_simulation.ExpectedResultingQuantity uds |
+                        <strong>Costo Total Est.:</strong> RD$ @_simulation.EstimatedTotalCost.ToString("N2") |
+                        <strong>Unitario Est.:</strong> RD$ @_simulation.EstimatedUnitCost.ToString("N2")
+                    </div>
+                    <table class="table table-sm small mb-2">
+                        <thead><tr><th>Material</th><th>Requerido</th><th>Disponible</th><th>Costo Est.</th></tr></thead>
+                        <tbody>
+                            @foreach (var m in _simulation.Materials)
+                            {
+                                <tr class="@(m.HasSufficientStock ? "" : "table-danger")">
+                                    <td>@m.Name</td>
+                                    <td>@m.RequiredQuantity.ToString("N2") @UnitConverter.GetShortLabel(m.MaterialUnit)</td>
+                                    <td>@m.AvailableStock.ToString("N2")</td>
+                                    <td>RD$ @m.EstimatedTotalCost.ToString("N2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                <input class="form-control form-control-sm" placeholder="Código de lote (opcional)" @bind="_batchCode" />
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="() => _showCreate = false">Cerrar</button>
+                <button class="btn btn-brand" @onclick="CreateDraftAsync">Crear Orden (Borrador)</button>
+            </div>
+        </div></div>
+    </div>
+}
+
+@if (_showComplete && _completeTarget != null)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.45);">
+        <div class="modal-dialog"><div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Completar Orden @_completeTarget.OrderNumber</h5><button class="btn-close" @onclick="() => _showComplete = false"></button></div>
+            <div class="modal-body">
+                <div class="mb-2 small text-muted">Planificado: @_completeTarget.PlannedQuantity uds | Esperado: @_completeTarget.ExpectedResultingQuantity uds</div>
+                <div class="mb-2"><label class="form-label small fw-semibold">Cantidad Resultante Real (uds)</label><input type="number" class="form-control" @bind="_actualYield" /></div>
+                <div class="mb-2"><label class="form-label small fw-semibold">Costo Indirecto Real (RD$)</label><input type="number" step="0.01" class="form-control" @bind="_actualOverhead" /></div>
+                <div><label class="form-label small fw-semibold">Fecha de Vencimiento del Lote</label><input type="date" class="form-control" @bind="_expirationDate" /></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="() => _showComplete = false">Cancelar</button>
+                <button class="btn btn-brand" @onclick="ConfirmCompleteAsync">Cerrar Lote y Contabilizar</button>
+            </div>
+        </div></div>
+    </div>
+}

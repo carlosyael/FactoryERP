@@ -1,0 +1,40 @@
+@attribute [AllowAnonymous]
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <ImportMap />
+    <script>
+        (function () {
+            var theme = localStorage.getItem('factoryerp_theme') || 'light';
+            document.documentElement.setAttribute('data-bs-theme', theme);
+        })();
+    </script>
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+<body>
+    <Routes @rendermode="InteractiveServer" />
+    <script src="_framework/blazor.web.js"></script>
+    <script src="_content/CurrieTechnologies.Razor.SweetAlert2/sweetAlert2.min.js"></script>
+    <script>
+        window.getTheme = () => localStorage.getItem('factoryerp_theme') || 'light';
+        window.setTheme = (theme) => {
+            document.documentElement.setAttribute('data-bs-theme', theme);
+            localStorage.setItem('factoryerp_theme', theme);
+        };
+        window.copyTextToClipboard = async (text) => {
+            if (navigator.clipboard) {
+                await navigator.clipboard.writeText(text);
+                return true;
+            }
+            return false;
+        };
+        window.printPage = () => window.print();
+    </script>
+</body>
+</html>

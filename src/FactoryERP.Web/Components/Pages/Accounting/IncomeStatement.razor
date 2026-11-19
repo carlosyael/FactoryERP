@@ -1,0 +1,38 @@
+@page "/accounting/income-statement"
+@attribute [Authorize(Policy = Permissions.ReportsView)]
+@inject IFinancialReportService ReportService
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div>
+        <h3 class="fw-bold mb-0">Estado de Resultados (P&amp;L)</h3>
+        <small class="text-muted">Ingresos, Costo de Productos Vendidos, Mermas Anormales y Utilidad Neta</small>
+    </div>
+    <div class="d-flex gap-2">
+        <input type="date" class="form-control form-control-sm" @bind="_startDate" />
+        <input type="date" class="form-control form-control-sm" @bind="_endDate" />
+        <button class="btn btn-brand btn-sm" @onclick="LoadAsync">Consultar</button>
+    </div>
+</div>
+
+@if (_data != null)
+{
+    <div class="card p-4">
+        <div class="d-flex justify-content-between py-2 border-bottom"><span>Ingresos Operacionales</span><strong>RD$ @_data.Revenue.ToString("N2")</strong></div>
+        <div class="d-flex justify-content-between py-2 border-bottom text-danger"><span>(-) Costo de Ventas (COGS)</span><span>RD$ @_data.CostOfGoodsSold.ToString("N2")</span></div>
+        <div class="d-flex justify-content-between py-2 border-bottom text-danger"><span>(-) Mermas Anormales de Producción</span><span>RD$ @_data.AbnormalLossCost.ToString("N2")</span></div>
+        <div class="d-flex justify-content-between py-2 border-bottom fw-bold"><span>Utilidad Bruta</span><span>RD$ @_data.GrossProfit.ToString("N2")</span></div>
+        <div class="d-flex justify-content-between py-2 border-bottom text-danger"><span>(-) Gastos Operativos</span><span>RD$ @_data.OperatingExpenses.ToString("N2")</span></div>
+        <div class="d-flex justify-content-between py-3 fs-5 fw-bold @(_data.NetIncome >= 0 ? "text-success" : "text-danger")">
+            <span>Utilidad Neta del Período</span><span>RD$ @_data.NetIncome.ToString("N2")</span>
+        </div>
+    </div>
+}
+
+@code {
+    private DateTime _startDate = new(DateTime.Today.Year, 1, 1);
+    private DateTime _endDate = DateTime.Today;
+    private IncomeStatementDto? _data;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+    private async Task LoadAsync() => _data = await ReportService.GetIncomeStatementAsync(_startDate, _endDate);
+}

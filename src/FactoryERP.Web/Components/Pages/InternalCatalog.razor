@@ -1,0 +1,106 @@
+@page "/catalog"
+@attribute [Authorize(Policy = Permissions.CatalogManage)]
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div>
+        <h3 class="fw-bold mb-0">Catálogo Interno de Productos</h3>
+        <small class="text-muted">Costos reales, márgenes, precios por segmento y publicación al catálogo</small>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/catalogo" target="_blank" class="btn btn-outline-secondary btn-sm"><i class="bi bi-shop me-1"></i> Vista Pública</a>
+        <button class="btn btn-brand btn-sm" @onclick="OpenNewModal"><i class="bi bi-plus-lg me-1"></i> Nuevo Producto</button>
+    </div>
+</div>
+
+<div class="row g-2 mb-3">
+    <div class="col-md-5"><input class="form-control form-control-sm" placeholder="Buscar por nombre o SKU..." @bind="_search" @bind:after="LoadAsync" /></div>
+    <div class="col-md-3">
+        <select class="form-select form-select-sm" @bind="_selectedLine" @bind:after="LoadAsync">
+            <option value="">Todas las líneas</option>
+            @foreach (var line in _lines) { <option value="@line">@line</option> }
+        </select>
+    </div>
+</div>
+
+<div class="row g-3">
+    @foreach (var item in _items)
+    {
+        <div class="col-md-6 col-xl-4">
+            <div class="card h-100 overflow-hidden">
+                @if (!string.IsNullOrWhiteSpace(item.ImageUrl))
+                {
+                    <img src="@item.ImageUrl" class="catalog-card-img" alt="@item.Name" />
+                }
+                else
+                {
+                    <div class="catalog-card-img d-flex align-items-center justify-content-center text-brand">
+                        <i class="bi bi-droplet-fill display-4 opacity-50"></i>
+                    </div>
+                }
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start mb-1">
+                        <span class="badge bg-secondary-subtle text-body">@item.Line • @item.Presentation</span>
+                        <span class="badge @(item.ShowInPublicCatalog ? "bg-success" : "bg-secondary")">
+                            @(item.ShowInPublicCatalog ? "Público" : "Interno")
+                        </span>
+                    </div>
+                    <h6 class="fw-bold mb-1">@item.Name</h6>
+                    <small class="text-muted mb-2">SKU: @item.Sku | Stock: <strong>@item.AvailableStock uds</strong></small>
+                    <div class="small border-top pt-2 mt-auto">
+                        <div class="d-flex justify-content-between"><span>Costo CPP:</span><strong>RD$ @item.Cost.ToString("N2")</strong></div>
+                        <div class="d-flex justify-content-between"><span>Detalle / Salón / Mayor:</span><span>@item.RetailPrice.ToString("N0") / @item.SalonPrice.ToString("N0") / @item.WholesalePrice.ToString("N0")</span></div>
+                        <div class="d-flex justify-content-between"><span>Margen Bruto:</span><strong class="text-success">@item.GrossMarginPercent.ToString("N1")%</strong></div>
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary w-100 mt-2" @onclick="() => OpenEditModalAsync(item.ProductId)">Editar / Foto</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (_showModal)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.45);">
+        <div class="modal-dialog modal-lg"><div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">@(_editing.Id == 0 ? "Nuevo Producto Capilar" : "Editar Producto")</h5><button class="btn-close" @onclick="() => _showModal = false"></button></div>
+            <div class="modal-body">
+                <div class="row g-2 mb-2">
+                    <div class="col-md-3"><label class="form-label small">SKU</label><input class="form-control" @bind="_editing.Sku" /></div>
+                    <div class="col-md-5"><label class="form-label small">Nombre</label><input class="form-control" @bind="_editing.Name" /></div>
+                    <div class="col-md-2"><label class="form-label small">Línea</label><input class="form-control" @bind="_editing.Line" /></div>
+                    <div class="col-md-2"><label class="form-label small">Pres.</label><input class="form-control" @bind="_editing.Presentation" /></div>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-md-3"><label class="form-label small">PVP Detalle</label><input type="number" class="form-control" @bind="_editing.RetailPrice" /></div>
+                    <div class="col-md-3"><label class="form-label small">Precio Salón</label><input type="number" class="form-control" @bind="_editing.SalonPrice" /></div>
+                    <div class="col-md-3"><label class="form-label small">Precio Mayorista</label><input type="number" class="form-control" @bind="_editing.WholesalePrice" /></div>
+                    <div class="col-md-3"><label class="form-label small">Stock Mín.</label><input type="number" class="form-control" @bind="_editing.MinimumStockLevel" /></div>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-md-6"><label class="form-label small">Beneficios</label><input class="form-control" @bind="_editing.Benefits" /></div>
+                    <div class="col-md-6"><label class="form-label small">Ingredientes Clave</label><input class="form-control" @bind="_editing.KeyIngredients" /></div>
+                </div>
+                <div class="mb-2"><label class="form-label small">Descripción</label><textarea class="form-control" rows="2" @bind="_editing.Description"></textarea></div>
+                <div class="mb-2"><label class="form-label small">Modo de Uso</label><textarea class="form-control" rows="2" @bind="_editing.UsageInstructions"></textarea></div>
+                <div class="row g-2 align-items-center mb-2">
+                    <div class="col-md-6">
+                        <label class="form-label small">Foto del Producto</label>
+                        <InputFile class="form-control form-control-sm" OnChange="OnImageUploadAsync" accept=".jpg,.jpeg,.png,.webp" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">O URL de Imagen</label>
+                        <input class="form-control form-control-sm" @bind="_editing.ImageUrl" />
+                    </div>
+                </div>
+                <div class="d-flex gap-4">
+                    <div class="form-check form-switch"><input class="form-check-input" type="checkbox" @bind="_editing.ShowInPublicCatalog" /><label class="form-check-label small">Mostrar en catálogo público</label></div>
+                    <div class="form-check form-switch"><input class="form-check-input" type="checkbox" @bind="_editing.IsTaxable" /><label class="form-check-label small">Grava ITBIS (18%)</label></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="() => _showModal = false">Cancelar</button>
+                <button class="btn btn-brand" @onclick="SaveAsync">Guardar Producto</button>
+            </div>
+        </div></div>
+    </div>
+}

@@ -1,0 +1,78 @@
+@page "/users"
+@attribute [Authorize(Policy = Permissions.UsersManage)]
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<ApplicationUser> UserManager
+@inject SweetAlertService Swal
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div><h3 class="fw-bold mb-0">Usuarios del Sistema</h3><small class="text-muted">Control de acceso y roles operativos</small></div>
+    <button class="btn btn-brand btn-sm" @onclick="() => _showModal = true"><i class="bi bi-person-plus me-1"></i> Nuevo Usuario</button>
+</div>
+
+<div class="card p-3">
+    <table class="table table-hover align-middle mb-0">
+        <thead class="table-light"><tr><th>Nombre</th><th>Correo</th><th>Roles</th><th>Estado</th></tr></thead>
+        <tbody>
+            @foreach (var u in _users)
+            {
+                <tr>
+                    <td class="fw-semibold">@u.FullName</td>
+                    <td>@u.Email</td>
+                    <td>@string.Join(", ", _rolesMap.GetValueOrDefault(u.Id, []))</td>
+                    <td><span class="badge @(u.IsActive ? "bg-success" : "bg-secondary")">@(u.IsActive ? "Activo" : "Inactivo")</span></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (_showModal)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.45);">
+        <div class="modal-dialog modal-sm"><div class="modal-content">
+            <div class="modal-header"><h6 class="modal-title">Crear Usuario</h6><button class="btn-close" @onclick="() => _showModal = false"></button></div>
+            <div class="modal-body">
+                <label class="form-label small">Nombre Completo</label><input class="form-control form-control-sm mb-2" @bind="_fullName" />
+                <label class="form-label small">Correo</label><input type="email" class="form-control form-control-sm mb-2" @bind="_email" />
+                <label class="form-label small">Contraseña</label><input type="password" class="form-control form-control-sm mb-2" @bind="_password" />
+                <label class="form-label small">Rol</label>
+                <select class="form-select form-select-sm" @bind="_role">
+                    @foreach (var r in UserRoles.GetAll()) { <option value="@r">@r</option> }
+                </select>
+            </div>
+            <div class="modal-footer"><button class="btn btn-brand btn-sm" @onclick="CreateUserAsync">Crear</button></div>
+        </div></div>
+    </div>
+}
+
+@code {
+    private List<ApplicationUser> _users = new();
+    private readonly Dictionary<string, IList<string>> _rolesMap = new();
+    private bool _showModal;
+    private string _fullName = "", _email = "", _password = "", _role = UserRoles.Produccion;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _users = UserManager.Users.OrderBy(u => u.FullName).ToList();
+        _rolesMap.Clear();
+        foreach (var u in _users) _rolesMap[u.Id] = await UserManager.GetRolesAsync(u);
+    }
+
+    private async Task CreateUserAsync()
+    {
+        var user = new ApplicationUser { FullName = _fullName.Trim(), Email = _email.Trim(), UserName = _email.Trim(), EmailConfirmed = true, IsActive = true };
+        var res = await UserManager.CreateAsync(user, _password);
+        if (!res.Succeeded)
+        {
+            await Swal.FireAsync("Error", string.Join("; ", res.Errors.Select(e => e.Description)), SweetAlertIcon.Error);
+            return;
+        }
+        await UserManager.AddToRoleAsync(user, _role);
+        _showModal = false;
+        _fullName = _email = _password = "";
+        await LoadAsync();
+        await Swal.FireAsync("Usuario creado", "Acceso asignado.", SweetAlertIcon.Success);
+    }
+}

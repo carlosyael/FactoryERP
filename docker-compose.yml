@@ -1,0 +1,50 @@
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: factoryerp_db
+    env_file:
+      - .env
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${SA_PASSWORD}
+      - MSSQL_PID=Developer
+      - MSSQL_MEMORY_LIMIT_MB=${MSSQL_MEMORY_LIMIT_MB:-2048}
+    mem_limit: 2560m
+    expose:
+      - "1433"
+    volumes:
+      - factoryerp_sql_data:/var/opt/mssql
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./src
+      dockerfile: Dockerfile
+    container_name: factoryerp_web
+    env_file:
+      - .env
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - DatabaseProvider=SqlServer
+      - ConnectionStrings__DefaultConnection=Server=db;Database=FactoryERP_DB;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;MultipleActiveResultSets=true
+      - JwtSettings__SecretKey=${JWT_SECRET_KEY:?Error JWT_SECRET_KEY no definida en .env}
+      - SEED_ADMIN_PASSWORD=${SEED_ADMIN_PASSWORD:-Admin123!}
+    volumes:
+      - factoryerp_keys:/app/dataprotection-keys
+      - factoryerp_uploads:/app/wwwroot/uploads
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  factoryerp_sql_data:
+  factoryerp_keys:
+  factoryerp_uploads:
