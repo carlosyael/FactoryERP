@@ -5,8 +5,11 @@ using FactoryERP.Core.Models;
 
 namespace FactoryERP.Infrastructure.Services;
 
+internal sealed record BatchDeduction(FinishedBatch Batch, int QuantityTaken, int BalanceAfter);
+
 internal sealed record SaleAllocationSummary(
     List<SaleItem> SaleItems,
+    List<BatchDeduction> Deductions,
     decimal SubTotal,
     decimal TotalDiscount,
     decimal TotalTax,
@@ -23,6 +26,7 @@ internal static class FefoBatchAllocator
         decimal defaultTaxRate)
     {
         var saleItems = new List<SaleItem>();
+        var deductions = new List<BatchDeduction>();
         decimal subTotal = 0m, totalDiscount = 0m, totalTax = 0m, totalCogs = 0m;
 
         foreach (var reqItem in requestItems.OrderBy(i => i.ProductId))
@@ -51,6 +55,7 @@ internal static class FefoBatchAllocator
                 int take = Math.Min(remainingToPick, batch.QuantityRemaining);
                 batch.QuantityRemaining -= take;
                 remainingToPick -= take;
+                deductions.Add(new BatchDeduction(batch, take, batch.QuantityRemaining));
 
                 bool isLastBatchForLine = remainingToPick == 0;
                 decimal ratio = take / (decimal)reqItem.Quantity;
@@ -86,6 +91,6 @@ internal static class FefoBatchAllocator
             totalTax += calc.TaxAmount;
         }
 
-        return new SaleAllocationSummary(saleItems, subTotal, totalDiscount, totalTax, totalCogs);
+        return new SaleAllocationSummary(saleItems, deductions, subTotal, totalDiscount, totalTax, totalCogs);
     }
 }

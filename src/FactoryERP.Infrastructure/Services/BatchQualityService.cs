@@ -80,6 +80,9 @@ public sealed class BatchQualityService : IBatchQualityService
                     throw new InvalidOperationException("La nueva existencia es igual a la existencia actual del lote.");
 
                 batch.QuantityRemaining = request.NewQuantity;
+                InventoryKardexRecorder.RecordFinishedBatch(
+                    context, batch, InventoryMovementType.FinishedBatchAdjustment, deltaQty, batch.QuantityRemaining,
+                    batch.BatchCode, request.Reason.Trim(), _currentUser?.UserName);
                 await context.SaveChangesAsync();
                 await tx.CommitAsync();
                 snapshot = batch;

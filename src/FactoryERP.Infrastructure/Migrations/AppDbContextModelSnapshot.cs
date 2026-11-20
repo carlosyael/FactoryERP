@@ -492,6 +492,95 @@ namespace FactoryERP.Infrastructure.Migrations
                     b.ToTable("FormulaItems");
                 });
 
+            modelBuilder.Entity("FactoryERP.Core.Entities.InventoryMovement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("BalanceAfter")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("BatchCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("FinishedBatchId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ItemType")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("MovementDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("MovementType")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<string>("PerformedBy")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int?>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("QuantityDelta")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int?>("RawMaterialId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<decimal>("TotalValue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FinishedBatchId");
+
+                    b.HasIndex("MovementDate");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("RawMaterialId");
+
+                    b.HasIndex("ItemType", "MovementDate");
+
+                    b.ToTable("InventoryMovements");
+                });
+
             modelBuilder.Entity("FactoryERP.Core.Entities.JournalEntry", b =>
                 {
                     b.Property<int>("Id")
@@ -1622,6 +1711,30 @@ namespace FactoryERP.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("ProductFormula");
+
+                    b.Navigation("RawMaterial");
+                });
+
+            modelBuilder.Entity("FactoryERP.Core.Entities.InventoryMovement", b =>
+                {
+                    b.HasOne("FactoryERP.Core.Entities.FinishedBatch", "FinishedBatch")
+                        .WithMany()
+                        .HasForeignKey("FinishedBatchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("FactoryERP.Core.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("FactoryERP.Core.Entities.RawMaterial", "RawMaterial")
+                        .WithMany()
+                        .HasForeignKey("RawMaterialId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("FinishedBatch");
+
+                    b.Navigation("Product");
 
                     b.Navigation("RawMaterial");
                 });

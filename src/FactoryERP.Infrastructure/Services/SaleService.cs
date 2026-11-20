@@ -14,17 +14,20 @@ public sealed class SaleService : ISaleService
     private readonly ISystemSettingService _settings;
     private readonly IManufacturingAccountingService _accounting;
     private readonly ITaxDocumentProvider _taxDocumentProvider;
+    private readonly ICurrentUserService? _currentUser;
 
     public SaleService(
         IDbContextFactory<AppDbContext> contextFactory,
         ISystemSettingService settings,
         IManufacturingAccountingService accounting,
-        ITaxDocumentProvider taxDocumentProvider)
+        ITaxDocumentProvider taxDocumentProvider,
+        ICurrentUserService? currentUser = null)
     {
         _contextFactory = contextFactory;
         _settings = settings;
         _accounting = accounting;
         _taxDocumentProvider = taxDocumentProvider;
+        _currentUser = currentUser;
     }
 
     public async Task<List<Sale>> GetAllAsync()
@@ -91,10 +94,13 @@ public sealed class SaleService : ISaleService
                     customer.CurrentBalance += total;
                 }
 
+                string saleNumber = $"VTA-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..5].ToUpperInvariant()}";
+                DateTime saleDate = request.SaleDate ?? DateTime.UtcNow;
+
                 sale = new Sale
                 {
-                    SaleNumber = $"VTA-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..5].ToUpperInvariant()}",
-                    SaleDate = request.SaleDate ?? DateTime.UtcNow,
+                    SaleNumber = saleNumber,
+                    SaleDate = saleDate,
                     CustomerId = customer.Id,
                     PaymentMethod = request.PaymentMethod,
                     SubTotal = summary.SubTotal,
@@ -111,6 +117,12 @@ public sealed class SaleService : ISaleService
                 sale.TaxDocumentNumber = taxResult.DocumentNumber;
 
                 context.Sales.Add(sale);
+                foreach (var d in summary.Deductions)
+                {
+                    InventoryKardexRecorder.RecordFinishedBatch(
+                        context, d.Batch, InventoryMovementType.SaleDispatch, -d.QuantityTaken, d.BalanceAfter,
+                        saleNumber, $"Venta a {customer.Name}", _currentUser?.UserName, saleDate);
+                }
                 await context.SaveChangesAsync();
                 await tx.CommitAsync();
             }

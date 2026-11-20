@@ -79,6 +79,9 @@
                             }
                         </td>
                         <td class="text-end text-nowrap">
+                            <a class="btn btn-sm btn-outline-secondary me-1" href="/kardex?search=@Uri.EscapeDataString(b.BatchCode)" title="Ver Kardex del lote">
+                                <i class="bi bi-clock-history"></i>
+                            </a>
                             <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => OpenQualityModal(b)">Calidad</button>
                             <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenAdjustModal(b)">Ajustar / Baja</button>
                         </td>

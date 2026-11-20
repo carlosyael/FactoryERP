@@ -135,16 +135,11 @@ public static class DbInitializer
     private static async Task SeedMenusAsync(AppDbContext context)
     {
         var existingMenus = await context.AppMenus.ToListAsync();
-        if (existingMenus.Count > 0)
+        bool repaired = false;
+        foreach (var menu in existingMenus)
         {
-            bool repaired = false;
-            foreach (var menu in existingMenus)
-            {
-                if (menu.Icon == "bi-flask") { menu.Icon = "bi-eyedropper"; repaired = true; }
-                else if (menu.Icon == "bi-scale") { menu.Icon = "bi-calculator"; repaired = true; }
-            }
-            if (repaired) await context.SaveChangesAsync();
-            return;
+            if (menu.Icon == "bi-flask") { menu.Icon = "bi-eyedropper"; repaired = true; }
+            else if (menu.Icon == "bi-scale") { menu.Icon = "bi-calculator"; repaired = true; }
         }
 
         var menus = new List<AppMenu>
@@ -153,6 +148,7 @@ public static class DbInitializer
             new() { Title = "Fórmulas y Recetas", Url = "formulas", Icon = "bi-eyedropper", MenuGroup = "Producción", RequiredPermission = Permissions.FormulasManage, DisplayOrder = 20 },
             new() { Title = "Órdenes de Producción", Url = "production", Icon = "bi-gear-wide-connected", MenuGroup = "Producción", RequiredPermission = Permissions.ProductionManage, DisplayOrder = 30 },
             new() { Title = "Lotes Terminados", Url = "batches", Icon = "bi-boxes", MenuGroup = "Producción", RequiredPermission = Permissions.ProductionManage, DisplayOrder = 40 },
+            new() { Title = "Kardex de Inventario", Url = "kardex", Icon = "bi-arrow-left-right", MenuGroup = "Producción", RequiredPermission = Permissions.RawMaterialsView, DisplayOrder = 45 },
 
             new() { Title = "Suplidores", Url = "suppliers", Icon = "bi-truck", MenuGroup = "Compras e Insumos", RequiredPermission = Permissions.PurchasesManage, DisplayOrder = 50 },
             new() { Title = "Compras de Insumos", Url = "purchases", Icon = "bi-cart-plus", MenuGroup = "Compras e Insumos", RequiredPermission = Permissions.PurchasesManage, DisplayOrder = 60 },
@@ -173,7 +169,9 @@ public static class DbInitializer
             new() { Title = "Roles y Permisos", Url = "roles", Icon = "bi-shield-lock", MenuGroup = "Sistema", RequiredPermission = Permissions.UsersManage, DisplayOrder = 170 }
         };
 
-        await context.AppMenus.AddRangeAsync(menus);
-        await context.SaveChangesAsync();
+        var existingUrls = existingMenus.Select(m => m.Url).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var missing = menus.Where(m => !existingUrls.Contains(m.Url)).ToList();
+        if (missing.Count > 0) await context.AppMenus.AddRangeAsync(missing);
+        if (repaired || missing.Count > 0) await context.SaveChangesAsync();
     }
 }

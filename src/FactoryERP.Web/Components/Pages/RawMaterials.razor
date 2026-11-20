@@ -60,7 +60,10 @@
                         <td class="fw-bold">@item.CurrentStock.ToString("N2") @UnitConverter.GetShortLabel(item.UnitOfMeasure)</td>
                         <td>@item.MinimumStockLevel.ToString("N2")</td>
                         <td>@_currencySymbol @item.AverageCost.ToString("N4")</td>
-                        <td class="text-end">
+                        <td class="text-end text-nowrap">
+                            <a class="btn btn-sm btn-outline-secondary me-1" href="/kardex?rawMaterialId=@item.Id" title="Ver Kardex">
+                                <i class="bi bi-clock-history"></i>
+                            </a>
                             <AuthorizeView Policy="@Permissions.RawMaterialsManage">
                                 <Authorized>
                                     <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => OpenEditModal(item)">

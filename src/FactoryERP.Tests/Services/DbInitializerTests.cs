@@ -53,6 +53,8 @@ public class DbInitializerTests
         menus.Should().NotContain(m => m.Icon == "bi-flask" || m.Icon == "bi-scale");
         menus.First(m => m.Url == "formulas").Icon.Should().Be("bi-eyedropper");
         menus.First(m => m.Url == "accounting/trial-balance").Icon.Should().Be("bi-calculator");
+        menus.Should().ContainSingle(m => m.Url == "kardex" && m.Icon == "bi-arrow-left-right");
+        menus.Should().HaveCount(19);
         (await verifyCtx.Products.CountAsync()).Should().Be(2);
         (await verifyCtx.DataProtectionKeys.CountAsync()).Should().Be(0);
     }

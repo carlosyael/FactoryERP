@@ -35,6 +35,9 @@ internal static class ProductionExecutionHelper
             item.UnitCostAtConsumption = mat.AverageCost;
             item.TotalCost = Math.Round(item.PlannedQuantity * mat.AverageCost, 2, MidpointRounding.AwayFromZero);
             matCost += item.TotalCost;
+            InventoryKardexRecorder.RecordRawMaterial(
+                context, mat, InventoryMovementType.ProductionConsumption, -item.PlannedQuantity, item.UnitCostAtConsumption,
+                order.OrderNumber, $"Inicio lote {order.BatchCode}");
         }
 
         order.ActualMaterialCost = matCost;
@@ -86,7 +89,7 @@ internal static class ProductionExecutionHelper
         product.Cost = ProductionCostCalculator.CalculateWeightedAverageCost(
             existingStock, product.Cost, request.ActualYieldQuantity, costResult.ActualUnitCost);
 
-        context.FinishedBatches.Add(new FinishedBatch
+        var newBatch = new FinishedBatch
         {
             ProductId = order.ProductId,
             ProductionOrderId = order.Id,
@@ -97,7 +100,11 @@ internal static class ProductionExecutionHelper
             QuantityRemaining = request.ActualYieldQuantity,
             UnitCost = costResult.ActualUnitCost,
             QualityStatus = requireQualityApproval ? BatchQualityStatus.Quarantine : BatchQualityStatus.Approved
-        });
+        };
+        context.FinishedBatches.Add(newBatch);
+        InventoryKardexRecorder.RecordFinishedBatch(
+            context, newBatch, InventoryMovementType.ProductionBatchOutput, request.ActualYieldQuantity,
+            request.ActualYieldQuantity, order.OrderNumber, $"Producción lote {order.BatchCode}");
         return initialWipMaterialCost;
     }
 
@@ -127,6 +134,10 @@ internal static class ProductionExecutionHelper
                 mat.CurrentStock = Math.Round(mat.CurrentStock - deltaQty, 4, MidpointRounding.AwayFromZero);
                 item.ActualQuantityUsed = roundedActual;
                 item.TotalCost = Math.Round(roundedActual * item.UnitCostAtConsumption, 2, MidpointRounding.AwayFromZero);
+                InventoryKardexRecorder.RecordRawMaterial(
+                    context, mat, InventoryMovementType.ProductionMaterialReconciliation, -deltaQty,
+                    item.UnitCostAtConsumption, order.OrderNumber,
+                    deltaQty > 0m ? $"Consumo adicional lote {order.BatchCode}" : $"Devolución sobrante lote {order.BatchCode}");
             }
         }
 
@@ -149,6 +160,10 @@ internal static class ProductionExecutionHelper
                     throw new InvalidOperationException($"Materia prima ID {item.RawMaterialId} no encontrada.");
                 mat.CurrentStock = Math.Round(
                     mat.CurrentStock + item.ActualQuantityUsed, 4, MidpointRounding.AwayFromZero);
+                InventoryKardexRecorder.RecordRawMaterial(
+                    context, mat, InventoryMovementType.ProductionCancellationReturn, item.ActualQuantityUsed,
+                    item.UnitCostAtConsumption, order.OrderNumber,
+                    string.IsNullOrWhiteSpace(reason) ? $"Cancelación orden {order.OrderNumber}" : reason.Trim());
             }
         }
 

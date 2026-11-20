@@ -120,6 +120,17 @@
   - `FinishedBatches.razor`: fecha/hora local en trazabilidad de inspección QC y vista previa del impacto en unidades y monto contable en el modal `Ajustar / Baja`.
 - **Verificación:** `dotnet build --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `111 / 111` pruebas aprobadas (incluyendo `BatchQualityServiceTests`), `has-pending-model-changes` sin cambios y máximo `199` líneas en `.cs` propios.
 
+## [2026-11-20] — Bloque C1: Kardex Unificado de Inventario (MP y Producto Terminado) (rama `fix/ux-refinements`)
+- **Requerimiento:** Proveer trazabilidad cronológica (Kardex) con saldos posteriores y valorización por cada entrada, salida, reconciliación, devolución, venta o baja tanto en materias primas como en lotes terminados.
+- **Cambios en Core, Persistencia y Servicios:**
+  - `InventoryItemType.cs`, `InventoryMovementType.cs`, `InventoryMovement.cs`, `InventoryModels.cs`, `IInventoryKardexService.cs`: entidad de movimiento de Kardex con referencias, `BatchCode`, `QuantityDelta`, `BalanceAfter`, `UnitCost`, `TotalValue`, `Notes` y `PerformedBy`.
+  - `AppDbContext.cs`, migración EF `20261120190002_AddInventoryKardex.cs`, `DbInitializer.cs`: tabla `InventoryMovements` con índices y precisión `(18,4)` / `(18,2)`, más siembra idempotente del menú `"Kardex de Inventario"` (`/kardex`).
+  - `InventoryKardexRecorder.cs`, `InventoryKardexService.cs`, `ServiceRegistrationExtensions.cs`: registro atómico dentro de las transacciones en `PurchaseOrderService`, `RawMaterialService`, `ProductionExecutionHelper` (inicio, reconciliación real, entrada de lote terminado y cancelación), `FefoBatchAllocator` + `SaleService` (despacho FEFO) y `BatchQualityService` (ajuste/baja de lotes).
+- **Cambios en UI y Pruebas:**
+  - `InventoryKardex.razor/.cs` (`/kardex`): filtros por inventario, tipo de movimiento, rango de fechas, búsqueda, query strings (`rawMaterialId`, `productId`, `search`), totales de entradas/salidas e impresión; enlaces rápidos desde `RawMaterials.razor` y `FinishedBatches.razor`.
+  - Nuevo `InventoryKardexServiceTests.cs` y ampliación de `DbInitializerTests.cs`.
+- **Verificación:** `dotnet build --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `112 / 112` pruebas aprobadas, `has-pending-model-changes` sin cambios, máximo `199` líneas en `.cs` propios y smoke test HTTP autenticado (`200 OK` en `/kardex`, `/raw-materials`, `/formulas`, `/production`, `/batches`, `/sales`, `/catalogo`).
+
 
 
 

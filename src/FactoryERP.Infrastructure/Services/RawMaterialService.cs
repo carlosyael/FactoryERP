@@ -1,5 +1,6 @@
 using FactoryERP.Core.Domain;
 using FactoryERP.Core.Entities;
+using FactoryERP.Core.Enums;
 using FactoryERP.Core.Interfaces;
 using FactoryERP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -10,13 +11,16 @@ public sealed class RawMaterialService : IRawMaterialService
 {
     private readonly IDbContextFactory<AppDbContext> _contextFactory;
     private readonly IManufacturingAccountingService? _accounting;
+    private readonly ICurrentUserService? _currentUser;
 
     public RawMaterialService(
         IDbContextFactory<AppDbContext> contextFactory,
-        IManufacturingAccountingService? accounting = null)
+        IManufacturingAccountingService? accounting = null,
+        ICurrentUserService? currentUser = null)
     {
         _contextFactory = contextFactory;
         _accounting = accounting;
+        _currentUser = currentUser;
     }
 
     public async Task<List<RawMaterial>> GetAllAsync(bool includeInactive = false)
@@ -114,6 +118,12 @@ public sealed class RawMaterialService : IRawMaterialService
             decimal roundedNew = Math.Round(newStock, 4, MidpointRounding.AwayFromZero);
             delta = roundedNew - material.CurrentStock;
             material.CurrentStock = roundedNew;
+            if (delta != 0m)
+            {
+                InventoryKardexRecorder.RecordRawMaterial(
+                    context, material, InventoryMovementType.RawMaterialAdjustment, delta, material.AverageCost,
+                    material.Sku, reason.Trim(), _currentUser?.UserName);
+            }
             await context.SaveChangesAsync();
             snapshot = material;
         }

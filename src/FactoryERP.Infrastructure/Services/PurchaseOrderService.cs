@@ -71,6 +71,8 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
             decimal subTotal = 0m;
             decimal totalTax = 0m;
             var items = new List<PurchaseOrderItem>();
+            string orderNumber = $"OC-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..5].ToUpperInvariant()}";
+            DateTime purchaseDate = request.PurchaseDate ?? DateTime.UtcNow;
 
             foreach (var reqItem in request.Items.OrderBy(i => i.RawMaterialId))
             {
@@ -88,6 +90,9 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
                     material.CurrentStock, material.AverageCost, reqItem.Quantity, reqItem.UnitCost);
                 material.LastPurchaseCost = reqItem.UnitCost;
                 material.CurrentStock = Math.Round(material.CurrentStock + reqItem.Quantity, 4, MidpointRounding.AwayFromZero);
+                InventoryKardexRecorder.RecordRawMaterial(
+                    context, material, InventoryMovementType.PurchaseReceipt, reqItem.Quantity, reqItem.UnitCost,
+                    orderNumber, $"Compra a {supplier.Name}", movementDate: purchaseDate);
 
                 subTotal += lineSub;
                 totalTax += lineTax;
@@ -111,9 +116,9 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
 
             order = new PurchaseOrder
             {
-                OrderNumber = $"OC-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..5].ToUpperInvariant()}",
+                OrderNumber = orderNumber,
                 SupplierId = supplier.Id,
-                PurchaseDate = request.PurchaseDate ?? DateTime.UtcNow,
+                PurchaseDate = purchaseDate,
                 Status = PurchaseOrderStatus.Received,
                 PaymentMethod = request.PaymentMethod,
                 SubTotal = subTotal,

@@ -28,6 +28,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IDataProtectionK
     public DbSet<ProductionOrder> ProductionOrders => Set<ProductionOrder>();
     public DbSet<ProductionOrderMaterial> ProductionOrderMaterials => Set<ProductionOrderMaterial>();
     public DbSet<FinishedBatch> FinishedBatches => Set<FinishedBatch>();
+    public DbSet<InventoryMovement> InventoryMovements => Set<InventoryMovement>();
 
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerPayment> CustomerPayments => Set<CustomerPayment>();
@@ -104,6 +105,13 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IDataProtectionK
             e.Property(x => x.TaxRate).HasPrecision(18, 4);
             e.Property(x => x.UnitCost).HasPrecision(18, 4);
         });
+
+        builder.Entity<InventoryMovement>(e =>
+        {
+            e.Property(x => x.QuantityDelta).HasPrecision(18, 4);
+            e.Property(x => x.BalanceAfter).HasPrecision(18, 4);
+            e.Property(x => x.UnitCost).HasPrecision(18, 4);
+        });
     }
 
     private static void ConfigureIndexes(ModelBuilder builder)
@@ -115,6 +123,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IDataProtectionK
         builder.Entity<FinishedBatch>().HasIndex(x => x.BatchCode).IsUnique();
         builder.Entity<FinishedBatch>().HasIndex(x => x.QualityStatus);
         builder.Entity<FinishedBatch>().HasIndex(x => new { x.ProductId, x.ExpirationDate });
+        builder.Entity<InventoryMovement>().HasIndex(x => x.MovementDate);
+        builder.Entity<InventoryMovement>().HasIndex(x => new { x.ItemType, x.MovementDate });
+        builder.Entity<InventoryMovement>().HasIndex(x => x.RawMaterialId);
+        builder.Entity<InventoryMovement>().HasIndex(x => x.ProductId);
         builder.Entity<Sale>().HasIndex(x => x.SaleNumber).IsUnique();
         builder.Entity<AccountingAccount>().HasIndex(x => x.Code).IsUnique();
         builder.Entity<JournalEntry>().HasIndex(x => x.EntryNumber).IsUnique();
@@ -142,6 +154,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IDataProtectionK
             .HasOne(x => x.Product).WithMany(p => p.FinishedBatches).HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<FinishedBatch>()
             .HasOne(x => x.ProductionOrder).WithMany().HasForeignKey(x => x.ProductionOrderId).OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<InventoryMovement>()
+            .HasOne(x => x.RawMaterial).WithMany().HasForeignKey(x => x.RawMaterialId).OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<InventoryMovement>()
+            .HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<InventoryMovement>()
+            .HasOne(x => x.FinishedBatch).WithMany().HasForeignKey(x => x.FinishedBatchId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Entity<CustomerPayment>()
             .HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
