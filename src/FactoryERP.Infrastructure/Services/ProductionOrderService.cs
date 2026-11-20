@@ -10,19 +10,21 @@ namespace FactoryERP.Infrastructure.Services;
 
 public sealed class ProductionOrderService : IProductionOrderService
 {
-    private static readonly SemaphoreSlim ProductionGate = new(1, 1);
     private readonly IDbContextFactory<AppDbContext> _contextFactory;
     private readonly ISystemSettingService _settings;
     private readonly IManufacturingAccountingService _accounting;
+    private readonly ICurrentUserService? _currentUser;
 
     public ProductionOrderService(
         IDbContextFactory<AppDbContext> contextFactory,
         ISystemSettingService settings,
-        IManufacturingAccountingService accounting)
+        IManufacturingAccountingService accounting,
+        ICurrentUserService? currentUser = null)
     {
         _contextFactory = contextFactory;
         _settings = settings;
         _accounting = accounting;
+        _currentUser = currentUser;
     }
 
     public async Task<List<ProductionOrder>> GetAllAsync()
@@ -68,10 +70,7 @@ public sealed class ProductionOrderService : IProductionOrderService
         var order = ProductionPlannerHelper.BuildDraftOrder(sim, request, batch, token);
 
         await using var context = await _contextFactory.CreateDbContextAsync();
-        bool batchExists = await context.FinishedBatches.AnyAsync(b => b.BatchCode == batch)
-            || await context.ProductionOrders.AnyAsync(o => o.BatchCode == batch && o.Status != ProductionOrderStatus.Cancelled);
-        if (batchExists)
-            throw new InvalidOperationException($"Ya existe una orden o lote registrado con el código '{batch}'.");
+        await ProductionPlannerHelper.EnsureBatchCodeUniqueAsync(context, batch);
 
         context.ProductionOrders.Add(order);
         await context.SaveChangesAsync();
@@ -93,11 +92,7 @@ public sealed class ProductionOrderService : IProductionOrderService
             ? order.BatchCode
             : request.BatchCode.Trim().ToUpperInvariant();
 
-        bool batchExists = await context.FinishedBatches.AnyAsync(b => b.BatchCode == batch)
-            || await context.ProductionOrders.AnyAsync(
-                o => o.Id != order.Id && o.BatchCode == batch && o.Status != ProductionOrderStatus.Cancelled);
-        if (batchExists)
-            throw new InvalidOperationException($"Ya existe una orden o lote registrado con el código '{batch}'.");
+        await ProductionPlannerHelper.EnsureBatchCodeUniqueAsync(context, batch, order.Id);
 
         context.RemoveRange(order.Materials);
         ProductionPlannerHelper.ApplyDraftUpdate(order, sim, request, batch);
@@ -107,7 +102,7 @@ public sealed class ProductionOrderService : IProductionOrderService
 
     public async Task<ProductionOrder> StartProductionAsync(int orderId)
     {
-        await ProductionGate.WaitAsync();
+        await InventoryConcurrencyGate.RawMaterialGate.WaitAsync();
         try
         {
             ProductionOrder order;
@@ -121,17 +116,17 @@ public sealed class ProductionOrderService : IProductionOrderService
                     .FirstOrDefaultAsync(o => o.Id == orderId)
                     ?? throw new InvalidOperationException("Orden de producción no encontrada.");
 
-                matCost = await ProductionExecutionHelper.StartOrderAsync(context, order);
+                matCost = await ProductionExecutionHelper.StartOrderAsync(context, order, _currentUser?.UserName);
                 await context.SaveChangesAsync();
                 await tx.CommitAsync();
             }
 
-            if (matCost > 0m) await _accounting.PostProductionStartAsync(order, matCost);
+            if (matCost > 0m) await _accounting.PostProductionStartAsync(order, matCost, _currentUser?.UserId);
             return (await GetByIdAsync(order.Id))!;
         }
         finally
         {
-            ProductionGate.Release();
+            InventoryConcurrencyGate.RawMaterialGate.Release();
         }
     }
 
@@ -139,7 +134,7 @@ public sealed class ProductionOrderService : IProductionOrderService
     {
         decimal tolerance = await _settings.GetDecimalAsync(SettingKeys.ProductionAbnormalLossTolerancePercent, 2m);
         bool requireQc = await _settings.GetBoolAsync(SettingKeys.ProductionRequireQualityApproval, false);
-        await ProductionGate.WaitAsync();
+        await InventoryConcurrencyGate.RawMaterialGate.WaitAsync();
         try
         {
             ProductionOrder order;
@@ -151,24 +146,25 @@ public sealed class ProductionOrderService : IProductionOrderService
                     .FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId)
                     ?? throw new InvalidOperationException("Orden de producción no encontrada.");
 
-                wipCleared = await ProductionExecutionHelper.CompleteOrderAsync(context, order, request, tolerance, requireQc);
+                wipCleared = await ProductionExecutionHelper.CompleteOrderAsync(
+                    context, order, request, tolerance, requireQc, _currentUser?.UserName);
                 await context.SaveChangesAsync();
                 await tx.CommitAsync();
             }
 
             if (wipCleared > 0m || order.ActualMaterialCost + order.ActualOverheadCost > 0m)
-                await _accounting.PostProductionCompletionAsync(order, wipMaterialCleared: wipCleared);
+                await _accounting.PostProductionCompletionAsync(order, _currentUser?.UserId, wipCleared);
             return (await GetByIdAsync(order.Id))!;
         }
         finally
         {
-            ProductionGate.Release();
+            InventoryConcurrencyGate.RawMaterialGate.Release();
         }
     }
 
     public async Task<ProductionOrder> CancelProductionAsync(int orderId, string reason)
     {
-        await ProductionGate.WaitAsync();
+        await InventoryConcurrencyGate.RawMaterialGate.WaitAsync();
         try
         {
             ProductionOrder order;
@@ -182,18 +178,18 @@ public sealed class ProductionOrderService : IProductionOrderService
                     .FirstOrDefaultAsync(o => o.Id == orderId)
                     ?? throw new InvalidOperationException("Orden de producción no encontrada.");
 
-                hadWip = await ProductionExecutionHelper.CancelOrderAsync(context, order, reason);
+                hadWip = await ProductionExecutionHelper.CancelOrderAsync(context, order, reason, _currentUser?.UserName);
                 await context.SaveChangesAsync();
                 await tx.CommitAsync();
             }
 
             if (hadWip && order.ActualMaterialCost > 0m)
-                await _accounting.PostProductionCancellationAsync(order);
+                await _accounting.PostProductionCancellationAsync(order, _currentUser?.UserId);
             return (await GetByIdAsync(order.Id))!;
         }
         finally
         {
-            ProductionGate.Release();
+            InventoryConcurrencyGate.RawMaterialGate.Release();
         }
     }
 }

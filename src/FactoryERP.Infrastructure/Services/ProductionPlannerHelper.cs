@@ -1,6 +1,9 @@
 using FactoryERP.Core.Domain;
 using FactoryERP.Core.Entities;
+using FactoryERP.Core.Enums;
 using FactoryERP.Core.Models;
+using FactoryERP.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace FactoryERP.Infrastructure.Services;
 
@@ -110,5 +113,16 @@ internal static class ProductionPlannerHelper
     {
         string trimmed = (notes ?? string.Empty).Trim();
         return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
+    }
+
+    public static async Task EnsureBatchCodeUniqueAsync(AppDbContext context, string batchCode, int? excludeOrderId = null)
+    {
+        bool exists = await context.FinishedBatches.AnyAsync(b => b.BatchCode == batchCode)
+            || await context.ProductionOrders.AnyAsync(
+                o => (!excludeOrderId.HasValue || o.Id != excludeOrderId.Value)
+                     && o.BatchCode == batchCode
+                     && o.Status != ProductionOrderStatus.Cancelled);
+        if (exists)
+            throw new InvalidOperationException($"Ya existe una orden o lote registrado con el código '{batchCode}'.");
     }
 }

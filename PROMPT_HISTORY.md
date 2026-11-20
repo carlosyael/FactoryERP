@@ -131,6 +131,13 @@
   - Nuevo `InventoryKardexServiceTests.cs` y ampliación de `DbInitializerTests.cs`.
 - **Verificación:** `dotnet build --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `112 / 112` pruebas aprobadas, `has-pending-model-changes` sin cambios, máximo `199` líneas en `.cs` propios y smoke test HTTP autenticado (`200 OK` en `/kardex`, `/raw-materials`, `/formulas`, `/production`, `/batches`, `/sales`, `/catalogo`).
 
+## [2026-11-20] — Auditoría Profunda Kardex: Concurrencia MP, Apertura Inicial, Atribución y Filtros (rama `fix/ux-refinements`)
+- **Correcciones Aplicadas:**
+  - `InventoryConcurrencyGate.cs`, `PurchaseOrderService.cs`, `RawMaterialService.cs`, `ProductionOrderService.cs`, `ProductionPlannerHelper.cs`: agregado `RawMaterialGate` compartido entre compras, ajustes MP y producción (serializando `CurrentStock` y saldos Kardex), unificación de unicidad `BatchCode` (`EnsureBatchCodeUniqueAsync`) y truncamiento de notas de compra a 300 chars.
+  - `RawMaterialService.cs`, `PurchaseOrderService.cs`, `ProductionOrderService.cs`, `ProductionExecutionHelper.cs`: registro de movimiento `"Inventario inicial"` al crear materia prima con stock > 0 y atribución de usuario real (`PerformedBy` / `UserId`) en compras, ajustes y órdenes.
+  - `InventoryKardex.razor/.cs`: limpieza automática de filtros de ítem incompatible al cambiar el selector de tipo, chips de filtro activo con `×` y estado vacío en tabla.
+- **Verificación:** `dotnet build --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `113 / 113` pruebas aprobadas (incluyendo `OpeningStockUserAttributionAndConcurrentMutations_PreserveAccurateKardexBalances`), `has-pending-model-changes` sin cambios y máximo `195` líneas en `.cs` propios.
+
 
 
 

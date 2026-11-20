@@ -23,6 +23,8 @@ public partial class InventoryKardex
     private string _currencySymbol = "RD$";
     private string _itemTypeFilter = string.Empty;
     private string _movementTypeFilter = string.Empty;
+    private int? _rawMaterialIdFilter;
+    private int? _productIdFilter;
     private DateTime _startDate = DateTime.UtcNow.Date.AddDays(-30);
     private DateTime _endDate = DateTime.UtcNow.Date;
     private string _search = string.Empty;
@@ -35,9 +37,23 @@ public partial class InventoryKardex
 
     protected override async Task OnParametersSetAsync()
     {
+        _rawMaterialIdFilter = RawMaterialId;
+        _productIdFilter = ProductId;
         if (!string.IsNullOrWhiteSpace(SearchQuery)) _search = SearchQuery;
-        if (RawMaterialId.HasValue) _itemTypeFilter = nameof(InventoryItemType.RawMaterial);
-        else if (ProductId.HasValue) _itemTypeFilter = nameof(InventoryItemType.FinishedGood);
+        if (_rawMaterialIdFilter.HasValue) _itemTypeFilter = nameof(InventoryItemType.RawMaterial);
+        else if (_productIdFilter.HasValue) _itemTypeFilter = nameof(InventoryItemType.FinishedGood);
+        await LoadAsync();
+    }
+
+    private async Task OnItemTypeChangedAsync()
+    {
+        if (_itemTypeFilter == nameof(InventoryItemType.RawMaterial)) _productIdFilter = null;
+        else if (_itemTypeFilter == nameof(InventoryItemType.FinishedGood)) _rawMaterialIdFilter = null;
+        else
+        {
+            _rawMaterialIdFilter = null;
+            _productIdFilter = null;
+        }
         await LoadAsync();
     }
 
@@ -46,13 +62,27 @@ public partial class InventoryKardex
         InventoryItemType? itemType = Enum.TryParse<InventoryItemType>(_itemTypeFilter, out var it) ? it : null;
         InventoryMovementType? movType = Enum.TryParse<InventoryMovementType>(_movementTypeFilter, out var mt) ? mt : null;
         _movements = await KardexService.GetMovementsAsync(new InventoryMovementFilter(
-            itemType, movType, RawMaterialId, ProductId, _startDate, _endDate, _search));
+            itemType, movType, _rawMaterialIdFilter, _productIdFilter, _startDate, _endDate, _search));
+    }
+
+    private async Task ClearRawMaterialFilterAsync()
+    {
+        _rawMaterialIdFilter = null;
+        await LoadAsync();
+    }
+
+    private async Task ClearProductFilterAsync()
+    {
+        _productIdFilter = null;
+        await LoadAsync();
     }
 
     private async Task ClearFiltersAsync()
     {
         _itemTypeFilter = string.Empty;
         _movementTypeFilter = string.Empty;
+        _rawMaterialIdFilter = null;
+        _productIdFilter = null;
         _startDate = DateTime.UtcNow.Date.AddDays(-30);
         _endDate = DateTime.UtcNow.Date;
         _search = string.Empty;

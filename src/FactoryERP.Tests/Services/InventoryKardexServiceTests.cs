@@ -1,5 +1,6 @@
 using FactoryERP.Core.Entities;
 using FactoryERP.Core.Enums;
+using FactoryERP.Core.Interfaces;
 using FactoryERP.Core.Models;
 using FactoryERP.Infrastructure.Services;
 using FactoryERP.Tests.Factories;
@@ -100,5 +101,57 @@ public class InventoryKardexServiceTests
             StartDate: DateTime.UtcNow.Date.AddDays(-1),
             EndDate: DateTime.UtcNow.Date.AddDays(1)));
         todayOnly.Should().ContainSingle();
+    }
+
+    private sealed class StubUser(string? userId, string? userName) : ICurrentUserService
+    {
+        public string? UserId => userId;
+        public string? UserName => userName;
+    }
+
+    [Fact]
+    public async Task OpeningStockUserAttributionAndConcurrentMutations_PreserveAccurateKardexBalances()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        await new ChartOfAccountsService(factory).SeedStandardChartAsync();
+
+        var operatorUser = new StubUser(null, "operador.planta");
+        var settings = new SystemSettingService(factory, new MemoryCache(new MemoryCacheOptions()));
+        var accounting = new ManufacturingAccountingService(factory);
+        var supplierSvc = new SupplierService(factory, accounting);
+        var matSvc = new RawMaterialService(factory, accounting, operatorUser);
+        var purchaseSvc = new PurchaseOrderService(factory, settings, accounting, operatorUser);
+        var productSvc = new ProductService(factory);
+        var formulaSvc = new FormulaService(factory);
+        var orderSvc = new ProductionOrderService(factory, settings, accounting, operatorUser);
+        var kardexSvc = new InventoryKardexService(factory);
+
+        var supplier = await supplierSvc.CreateAsync(new Supplier { Name = "Suplidor K2" });
+        var mat = await matSvc.CreateAsync(new RawMaterial
+        {
+            Sku = "K2-MP-1", Name = "Aceite Inicial", UnitOfMeasure = UnitOfMeasure.Milliliter, CurrentStock = 1000m, AverageCost = 2m
+        });
+        var product = await productSvc.CreateAsync(new Product { Sku = "K2-P1", Name = "Sérum", RetailPrice = 700m });
+        var formula = await formulaSvc.CreateAsync(new ProductFormula
+        {
+            ProductId = product.Id, Name = "Receta K2", Version = "1.0", BaseYieldQuantity = 5, StandardLossMarginPercent = 0m,
+            Items = [new() { RawMaterialId = mat.Id, QuantityRequired = 500m, UnitOfMeasure = UnitOfMeasure.Milliliter }]
+        });
+        var draft = await orderSvc.CreateDraftAsync(new CreateProductionOrderRequest(
+            formula.Id, 5, 0m, DateTime.UtcNow, DateTime.UtcNow.AddMonths(12), "LOT-K2-1"));
+
+        var buyTask = Task.Run(() => purchaseSvc.ReceivePurchaseAsync(new ReceivePurchaseRequest(
+            supplier.Id, PaymentMethod.Cash, DateTime.UtcNow, "Compra concurrente", [new(mat.Id, 600m, 2m, false)])));
+        var startTask = Task.Run(() => orderSvc.StartProductionAsync(draft.Id));
+        await Task.WhenAll(buyTask, startTask);
+
+        var refreshedMat = await matSvc.GetByIdAsync(mat.Id);
+        refreshedMat!.CurrentStock.Should().Be(1100m); // 1000 + 600 - 500
+
+        var movements = await kardexSvc.GetMovementsAsync(new InventoryMovementFilter(RawMaterialId: mat.Id));
+        movements.Should().HaveCount(3);
+        movements.Should().ContainSingle(m => m.Notes == "Inventario inicial" && m.QuantityDelta == 1000m && m.BalanceAfter == 1000m);
+        movements.Should().OnlyContain(m => m.PerformedBy == "operador.planta");
+        movements.Sum(m => m.QuantityDelta).Should().Be(1100m);
     }
 }

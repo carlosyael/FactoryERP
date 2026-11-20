@@ -9,7 +9,7 @@ namespace FactoryERP.Infrastructure.Services;
 
 internal static class ProductionExecutionHelper
 {
-    public static async Task<decimal> StartOrderAsync(AppDbContext context, ProductionOrder order)
+    public static async Task<decimal> StartOrderAsync(AppDbContext context, ProductionOrder order, string? performedBy = null)
     {
         if (order.Status != ProductionOrderStatus.Draft)
             throw new InvalidOperationException("Solo las órdenes en borrador pueden iniciarse.");
@@ -37,7 +37,7 @@ internal static class ProductionExecutionHelper
             matCost += item.TotalCost;
             InventoryKardexRecorder.RecordRawMaterial(
                 context, mat, InventoryMovementType.ProductionConsumption, -item.PlannedQuantity, item.UnitCostAtConsumption,
-                order.OrderNumber, $"Inicio lote {order.BatchCode}");
+                order.OrderNumber, $"Inicio lote {order.BatchCode}", performedBy);
         }
 
         order.ActualMaterialCost = matCost;
@@ -48,7 +48,8 @@ internal static class ProductionExecutionHelper
     }
 
     public static async Task<decimal> CompleteOrderAsync(
-        AppDbContext context, ProductionOrder order, CompleteProductionRequest request, decimal tolerance, bool requireQualityApproval = false)
+        AppDbContext context, ProductionOrder order, CompleteProductionRequest request,
+        decimal tolerance, bool requireQualityApproval = false, string? performedBy = null)
     {
         if (order.Status != ProductionOrderStatus.InProgress)
             throw new InvalidOperationException("Solo las órdenes en proceso pueden completarse.");
@@ -56,7 +57,7 @@ internal static class ProductionExecutionHelper
         decimal initialWipMaterialCost = order.ActualMaterialCost;
         if (request.ActualMaterialQuantities is { Count: > 0 })
         {
-            await ReconcileActualMaterialsAsync(context, order, request.ActualMaterialQuantities);
+            await ReconcileActualMaterialsAsync(context, order, request.ActualMaterialQuantities, performedBy);
         }
 
         decimal overheadCost = Math.Round(request.ActualOverheadCost ?? order.ActualOverheadCost, 2, MidpointRounding.AwayFromZero);
@@ -104,12 +105,12 @@ internal static class ProductionExecutionHelper
         context.FinishedBatches.Add(newBatch);
         InventoryKardexRecorder.RecordFinishedBatch(
             context, newBatch, InventoryMovementType.ProductionBatchOutput, request.ActualYieldQuantity,
-            request.ActualYieldQuantity, order.OrderNumber, $"Producción lote {order.BatchCode}");
+            request.ActualYieldQuantity, order.OrderNumber, $"Producción lote {order.BatchCode}", performedBy);
         return initialWipMaterialCost;
     }
 
     private static async Task ReconcileActualMaterialsAsync(
-        AppDbContext context, ProductionOrder order, IReadOnlyDictionary<int, decimal> actualQuantities)
+        AppDbContext context, ProductionOrder order, IReadOnlyDictionary<int, decimal> actualQuantities, string? performedBy = null)
     {
         var matIds = order.Materials.Select(m => m.RawMaterialId).Distinct().ToList();
         var materials = await context.RawMaterials.Where(m => matIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id);
@@ -137,14 +138,15 @@ internal static class ProductionExecutionHelper
                 InventoryKardexRecorder.RecordRawMaterial(
                     context, mat, InventoryMovementType.ProductionMaterialReconciliation, -deltaQty,
                     item.UnitCostAtConsumption, order.OrderNumber,
-                    deltaQty > 0m ? $"Consumo adicional lote {order.BatchCode}" : $"Devolución sobrante lote {order.BatchCode}");
+                    deltaQty > 0m ? $"Consumo adicional lote {order.BatchCode}" : $"Devolución sobrante lote {order.BatchCode}",
+                    performedBy);
             }
         }
 
         order.ActualMaterialCost = Math.Round(order.Materials.Sum(m => m.TotalCost), 2, MidpointRounding.AwayFromZero);
     }
 
-    public static async Task<bool> CancelOrderAsync(AppDbContext context, ProductionOrder order, string reason)
+    public static async Task<bool> CancelOrderAsync(AppDbContext context, ProductionOrder order, string reason, string? performedBy = null)
     {
         if (order.Status is ProductionOrderStatus.Completed or ProductionOrderStatus.Cancelled)
             throw new InvalidOperationException("La orden ya fue completada o cancelada.");
@@ -163,7 +165,8 @@ internal static class ProductionExecutionHelper
                 InventoryKardexRecorder.RecordRawMaterial(
                     context, mat, InventoryMovementType.ProductionCancellationReturn, item.ActualQuantityUsed,
                     item.UnitCostAtConsumption, order.OrderNumber,
-                    string.IsNullOrWhiteSpace(reason) ? $"Cancelación orden {order.OrderNumber}" : reason.Trim());
+                    string.IsNullOrWhiteSpace(reason) ? $"Cancelación orden {order.OrderNumber}" : reason.Trim(),
+                    performedBy);
             }
         }
 

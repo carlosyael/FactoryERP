@@ -14,15 +14,18 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
     private readonly IDbContextFactory<AppDbContext> _contextFactory;
     private readonly ISystemSettingService _settings;
     private readonly IManufacturingAccountingService _accounting;
+    private readonly ICurrentUserService? _currentUser;
 
     public PurchaseOrderService(
         IDbContextFactory<AppDbContext> contextFactory,
         ISystemSettingService settings,
-        IManufacturingAccountingService accounting)
+        IManufacturingAccountingService accounting,
+        ICurrentUserService? currentUser = null)
     {
         _contextFactory = contextFactory;
         _settings = settings;
         _accounting = accounting;
+        _currentUser = currentUser;
     }
 
     public async Task<List<PurchaseOrder>> GetAllAsync()
@@ -57,8 +60,10 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
         decimal taxRate = await _settings.GetDecimalAsync(SettingKeys.FiscalDefaultTaxRate, 0.18m);
         PurchaseOrder order;
 
-        await using (var context = await _contextFactory.CreateDbContextAsync())
+        await InventoryConcurrencyGate.RawMaterialGate.WaitAsync();
+        try
         {
+            await using var context = await _contextFactory.CreateDbContextAsync();
             using var tx = await context.Database.BeginTransactionAsync();
             var supplier = await context.Suppliers.FindAsync(request.SupplierId)
                 ?? throw new InvalidOperationException("Suplidor no encontrado.");
@@ -92,7 +97,7 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
                 material.CurrentStock = Math.Round(material.CurrentStock + reqItem.Quantity, 4, MidpointRounding.AwayFromZero);
                 InventoryKardexRecorder.RecordRawMaterial(
                     context, material, InventoryMovementType.PurchaseReceipt, reqItem.Quantity, reqItem.UnitCost,
-                    orderNumber, $"Compra a {supplier.Name}", movementDate: purchaseDate);
+                    orderNumber, $"Compra a {supplier.Name}", _currentUser?.UserName, purchaseDate);
 
                 subTotal += lineSub;
                 totalTax += lineTax;
@@ -125,7 +130,7 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
                 TaxAmount = totalTax,
                 Total = total,
                 AmountPaid = request.PaymentMethod == PaymentMethod.Credit ? 0m : total,
-                Notes = request.Notes.Trim(),
+                Notes = ProductionPlannerHelper.TruncateNotes(request.Notes, 300),
                 Items = items
             };
 
@@ -133,10 +138,14 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
             await context.SaveChangesAsync();
             await tx.CommitAsync();
         }
+        finally
+        {
+            InventoryConcurrencyGate.RawMaterialGate.Release();
+        }
 
         if (order.Total > 0m)
         {
-            await _accounting.PostPurchaseReceiptAsync(order);
+            await _accounting.PostPurchaseReceiptAsync(order, _currentUser?.UserId);
         }
         return (await GetByIdAsync(order.Id))!;
     }

@@ -53,8 +53,22 @@ public sealed class RawMaterialService : IRawMaterialService
 
         material.Sku = sku;
         material.Name = material.Name.Trim();
-        context.RawMaterials.Add(material);
-        await context.SaveChangesAsync();
+        if (material.CurrentStock > 0m)
+        {
+            using var tx = await context.Database.BeginTransactionAsync();
+            context.RawMaterials.Add(material);
+            await context.SaveChangesAsync();
+            InventoryKardexRecorder.RecordRawMaterial(
+                context, material, InventoryMovementType.RawMaterialAdjustment, material.CurrentStock,
+                material.AverageCost, material.Sku, "Inventario inicial", _currentUser?.UserName);
+            await context.SaveChangesAsync();
+            await tx.CommitAsync();
+        }
+        else
+        {
+            context.RawMaterials.Add(material);
+            await context.SaveChangesAsync();
+        }
         return material;
     }
 
@@ -110,8 +124,11 @@ public sealed class RawMaterialService : IRawMaterialService
         RawMaterial snapshot;
         decimal delta;
 
-        await using (var context = await _contextFactory.CreateDbContextAsync())
+        await InventoryConcurrencyGate.RawMaterialGate.WaitAsync();
+        try
         {
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            using var tx = await context.Database.BeginTransactionAsync();
             var material = await context.RawMaterials.FindAsync(rawMaterialId)
                 ?? throw new InvalidOperationException("Materia prima no encontrada.");
 
@@ -125,7 +142,12 @@ public sealed class RawMaterialService : IRawMaterialService
                     material.Sku, reason.Trim(), _currentUser?.UserName);
             }
             await context.SaveChangesAsync();
+            await tx.CommitAsync();
             snapshot = material;
+        }
+        finally
+        {
+            InventoryConcurrencyGate.RawMaterialGate.Release();
         }
 
         if (delta != 0m && snapshot.AverageCost > 0m && _accounting != null)
@@ -133,7 +155,7 @@ public sealed class RawMaterialService : IRawMaterialService
             decimal absValue = Math.Round(Math.Abs(delta) * snapshot.AverageCost, 2, MidpointRounding.AwayFromZero);
             if (absValue > 0m)
             {
-                await _accounting.PostRawMaterialAdjustmentAsync(snapshot, delta, reason.Trim());
+                await _accounting.PostRawMaterialAdjustmentAsync(snapshot, delta, reason.Trim(), _currentUser?.UserId);
             }
         }
     }

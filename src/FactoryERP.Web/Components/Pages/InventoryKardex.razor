@@ -16,7 +16,7 @@
     <div class="row g-2 align-items-end">
         <div class="col-md-2">
             <label class="form-label small mb-1">Inventario</label>
-            <select class="form-select form-select-sm" @bind="_itemTypeFilter">
+            <select class="form-select form-select-sm" @bind="_itemTypeFilter" @bind:after="OnItemTypeChangedAsync">
                 <option value="">Todos</option>
                 <option value="RawMaterial">Materias Primas</option>
                 <option value="FinishedGood">Producto Terminado</option>
@@ -54,10 +54,22 @@
     decimal totalIn = _movements.Where(m => m.QuantityDelta > 0m).Sum(m => m.TotalValue);
     decimal totalOut = _movements.Where(m => m.QuantityDelta < 0m).Sum(m => m.TotalValue);
 }
-<div class="d-flex flex-wrap gap-2 mb-3 small">
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3 small">
     <span class="badge bg-primary-subtle text-primary">Movimientos: @_movements.Count</span>
     <span class="badge bg-success-subtle text-success">Entradas: @_currencySymbol @totalIn.ToString("N2")</span>
     <span class="badge bg-danger-subtle text-danger">Salidas: @_currencySymbol @totalOut.ToString("N2")</span>
+    @if (_rawMaterialIdFilter.HasValue)
+    {
+        <button type="button" class="badge bg-info-subtle text-info-emphasis border-0" @onclick="ClearRawMaterialFilterAsync">
+            Materia Prima #@_rawMaterialIdFilter &times;
+        </button>
+    }
+    @if (_productIdFilter.HasValue)
+    {
+        <button type="button" class="badge bg-info-subtle text-info-emphasis border-0" @onclick="ClearProductFilterAsync">
+            Producto #@_productIdFilter &times;
+        </button>
+    }
 </div>
 
 <div class="card p-3">
@@ -77,37 +89,46 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach (var m in _movements)
+                @if (_movements.Count == 0)
                 {
-                    string unit = GetUnitLabel(m);
                     <tr>
-                        <td class="text-nowrap">@m.MovementDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
-                        <td><span class="badge @GetMovementBadge(m)">@GetMovementLabel(m.MovementType)</span></td>
-                        <td>
-                            <div class="fw-semibold">
-                                <span class="badge bg-secondary-subtle text-body me-1">@(m.ItemType == InventoryItemType.RawMaterial ? "MP" : "PT")</span>
-                                @GetItemTitle(m)
-                            </div>
-                            @if (!string.IsNullOrWhiteSpace(m.BatchCode))
-                            {
-                                <div class="text-muted">Lote: <code>@m.BatchCode</code></div>
-                            }
-                        </td>
-                        <td><code>@m.Reference</code></td>
-                        <td class="text-end fw-bold @(m.QuantityDelta >= 0m ? "text-success" : "text-danger")">
-                            @(m.QuantityDelta >= 0m ? "+" : "")@m.QuantityDelta.ToString("N2") @unit
-                        </td>
-                        <td class="text-end">@m.BalanceAfter.ToString("N2") @unit</td>
-                        <td class="text-end">@_currencySymbol @m.UnitCost.ToString("N4")</td>
-                        <td class="text-end fw-semibold">@_currencySymbol @m.TotalValue.ToString("N2")</td>
-                        <td>
-                            <div>@m.Notes</div>
-                            @if (!string.IsNullOrWhiteSpace(m.PerformedBy))
-                            {
-                                <div class="text-muted">Por: @m.PerformedBy</div>
-                            }
-                        </td>
+                        <td colspan="9" class="text-center text-muted py-4">No se encontraron movimientos para los filtros seleccionados.</td>
                     </tr>
+                }
+                else
+                {
+                    @foreach (var m in _movements)
+                    {
+                        string unit = GetUnitLabel(m);
+                        <tr>
+                            <td class="text-nowrap">@m.MovementDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                            <td><span class="badge @GetMovementBadge(m)">@GetMovementLabel(m.MovementType)</span></td>
+                            <td>
+                                <div class="fw-semibold">
+                                    <span class="badge bg-secondary-subtle text-body me-1">@(m.ItemType == InventoryItemType.RawMaterial ? "MP" : "PT")</span>
+                                    @GetItemTitle(m)
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(m.BatchCode))
+                                {
+                                    <div class="text-muted">Lote: <code>@m.BatchCode</code></div>
+                                }
+                            </td>
+                            <td><code>@m.Reference</code></td>
+                            <td class="text-end fw-bold @(m.QuantityDelta >= 0m ? "text-success" : "text-danger")">
+                                @(m.QuantityDelta >= 0m ? "+" : "")@m.QuantityDelta.ToString("N2") @unit
+                            </td>
+                            <td class="text-end">@m.BalanceAfter.ToString("N2") @unit</td>
+                            <td class="text-end">@_currencySymbol @m.UnitCost.ToString("N4")</td>
+                            <td class="text-end fw-semibold">@_currencySymbol @m.TotalValue.ToString("N2")</td>
+                            <td>
+                                <div>@m.Notes</div>
+                                @if (!string.IsNullOrWhiteSpace(m.PerformedBy))
+                                {
+                                    <div class="text-muted">Por: @m.PerformedBy</div>
+                                }
+                            </td>
+                        </tr>
+                    }
                 }
             </tbody>
         </table>
