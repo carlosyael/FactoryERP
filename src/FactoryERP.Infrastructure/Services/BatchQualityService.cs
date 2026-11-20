@@ -1,4 +1,5 @@
 using FactoryERP.Core.Entities;
+using FactoryERP.Core.Enums;
 using FactoryERP.Core.Interfaces;
 using FactoryERP.Core.Models;
 using FactoryERP.Infrastructure.Data;
@@ -8,7 +9,6 @@ namespace FactoryERP.Infrastructure.Services;
 
 public sealed class BatchQualityService : IBatchQualityService
 {
-    private static readonly SemaphoreSlim BatchGate = new(1, 1);
     private readonly IDbContextFactory<AppDbContext> _contextFactory;
     private readonly ICurrentUserService? _currentUser;
     private readonly IManufacturingAccountingService _accounting;
@@ -25,19 +25,35 @@ public sealed class BatchQualityService : IBatchQualityService
 
     public async Task<FinishedBatch> UpdateQualityStatusAsync(UpdateBatchQualityRequest request)
     {
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var batch = await context.FinishedBatches.FirstOrDefaultAsync(b => b.Id == request.BatchId)
-            ?? throw new InvalidOperationException("Lote terminado no encontrado.");
+        if (!Enum.IsDefined(typeof(BatchQualityStatus), request.Status))
+            throw new ArgumentOutOfRangeException(nameof(request), "Estado de calidad inválido.");
+        if (request.Status == BatchQualityStatus.Rejected && string.IsNullOrWhiteSpace(request.Notes))
+            throw new ArgumentException("Debe indicar el motivo del rechazo de calidad.", nameof(request));
 
-        batch.QualityStatus = request.Status;
-        batch.QualityNotes = ProductionPlannerHelper.TruncateNotes(request.Notes);
-        batch.QualityCheckedAt = DateTime.UtcNow;
-        batch.QualityCheckedBy = ProductionPlannerHelper.TruncateNotes(_currentUser?.UserName ?? "Sistema", 120);
+        await InventoryConcurrencyGate.FinishedBatchGate.WaitAsync();
+        try
+        {
+            await using var context = await _contextFactory.CreateDbContextAsync();
+            var batch = await context.FinishedBatches.FirstOrDefaultAsync(b => b.Id == request.BatchId)
+                ?? throw new InvalidOperationException("Lote terminado no encontrado.");
 
-        await context.SaveChangesAsync();
-        return await context.FinishedBatches.AsNoTracking()
-            .Include(b => b.Product)
-            .FirstAsync(b => b.Id == batch.Id);
+            if (request.Status == BatchQualityStatus.Approved && batch.IsExpired(DateTime.UtcNow.Date))
+                throw new InvalidOperationException("No se puede aprobar para venta un lote que ya está vencido.");
+
+            batch.QualityStatus = request.Status;
+            batch.QualityNotes = ProductionPlannerHelper.TruncateNotes(request.Notes);
+            batch.QualityCheckedAt = DateTime.UtcNow;
+            batch.QualityCheckedBy = ProductionPlannerHelper.TruncateNotes(_currentUser?.UserName ?? "Sistema", 120);
+
+            await context.SaveChangesAsync();
+            return await context.FinishedBatches.AsNoTracking()
+                .Include(b => b.Product)
+                .FirstAsync(b => b.Id == batch.Id);
+        }
+        finally
+        {
+            InventoryConcurrencyGate.FinishedBatchGate.Release();
+        }
     }
 
     public async Task<FinishedBatch> AdjustBatchQuantityAsync(AdjustBatchQuantityRequest request)
@@ -47,7 +63,7 @@ public sealed class BatchQualityService : IBatchQualityService
         if (string.IsNullOrWhiteSpace(request.Reason))
             throw new ArgumentException("El motivo del ajuste o baja del lote es obligatorio.", nameof(request));
 
-        await BatchGate.WaitAsync();
+        await InventoryConcurrencyGate.FinishedBatchGate.WaitAsync();
         try
         {
             FinishedBatch snapshot;
@@ -60,13 +76,16 @@ public sealed class BatchQualityService : IBatchQualityService
                     ?? throw new InvalidOperationException("Lote terminado no encontrado.");
 
                 deltaQty = request.NewQuantity - batch.QuantityRemaining;
+                if (deltaQty == 0)
+                    throw new InvalidOperationException("La nueva existencia es igual a la existencia actual del lote.");
+
                 batch.QuantityRemaining = request.NewQuantity;
                 await context.SaveChangesAsync();
                 await tx.CommitAsync();
                 snapshot = batch;
             }
 
-            if (deltaQty != 0 && snapshot.UnitCost > 0m)
+            if (snapshot.UnitCost > 0m)
             {
                 decimal absValue = Math.Round(Math.Abs(deltaQty) * snapshot.UnitCost, 2, MidpointRounding.AwayFromZero);
                 if (absValue > 0m)
@@ -83,7 +102,7 @@ public sealed class BatchQualityService : IBatchQualityService
         }
         finally
         {
-            BatchGate.Release();
+            InventoryConcurrencyGate.FinishedBatchGate.Release();
         }
     }
 }

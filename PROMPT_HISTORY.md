@@ -113,6 +113,13 @@
   - Nuevas pruebas en `BatchQualityServiceTests.cs` y ampliación en `BusinessProfileServiceTests.cs`.
 - **Verificación:** `dotnet build --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `110 / 110` pruebas aprobadas, `has-pending-model-changes` sin cambios, máximo `199` líneas en `.cs` propios y smoke test HTTP autenticado (`200 OK` en `/raw-materials`, `/formulas`, `/production`, `/batches`, `/settings`, `/sales`, `/catalogo`).
 
+## [2026-11-20] — Auditoría Profunda Bloque B: Puerta de Concurrencia Compartida y Guardas QC (rama `fix/ux-refinements`)
+- **Correcciones Aplicadas:**
+  - `InventoryConcurrencyGate.cs`, `SaleService.cs`, `BatchQualityService.cs`: unificación de `SaleGate` y `BatchGate` en `InventoryConcurrencyGate.FinishedBatchGate` compartido entre ventas FEFO, dictámenes de calidad y ajustes/bajas de lotes.
+  - `BatchQualityService.cs`: validación de enum válido en `BatchQualityStatus`, bloqueo de aprobación (`Approved`) sobre lotes vencidos, exigencia de motivo al rechazar (`Rejected`) y rechazo de ajustes sin cambio neto (`deltaQty == 0`).
+  - `FinishedBatches.razor`: fecha/hora local en trazabilidad de inspección QC y vista previa del impacto en unidades y monto contable en el modal `Ajustar / Baja`.
+- **Verificación:** `dotnet build --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `111 / 111` pruebas aprobadas (incluyendo `BatchQualityServiceTests`), `has-pending-model-changes` sin cambios y máximo `199` líneas en `.cs` propios.
+
 
 
 

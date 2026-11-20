@@ -70,9 +70,12 @@
                             {
                                 <div class="text-muted" style="font-size: 0.72rem;">@b.QualityNotes</div>
                             }
-                            @if (!string.IsNullOrWhiteSpace(b.QualityCheckedBy))
+                            @if (!string.IsNullOrWhiteSpace(b.QualityCheckedBy) || b.QualityCheckedAt.HasValue)
                             {
-                                <div class="text-muted" style="font-size: 0.7rem;">Por: @b.QualityCheckedBy</div>
+                                <div class="text-muted" style="font-size: 0.7rem;">
+                                    @(string.IsNullOrWhiteSpace(b.QualityCheckedBy) ? "" : $"Por: {b.QualityCheckedBy}")
+                                    @(b.QualityCheckedAt.HasValue ? $" • {b.QualityCheckedAt.Value.ToLocalTime():dd/MM/yy HH:mm}" : "")
+                                </div>
                             }
                         </td>
                         <td class="text-end text-nowrap">
@@ -125,6 +128,13 @@
                 <div class="small text-muted mb-2">Disponible actual: @_adjustTarget.QuantityRemaining uds</div>
                 <label class="form-label small fw-semibold">Nueva Existencia (uds)</label>
                 <input type="number" min="0" class="form-control form-control-sm mb-2" @bind="_newBatchQty" />
+                @{
+                    int previewDelta = _newBatchQty - _adjustTarget.QuantityRemaining;
+                    decimal previewImpact = Math.Round(previewDelta * _adjustTarget.UnitCost, 2, MidpointRounding.AwayFromZero);
+                }
+                <div class="small mb-2 @(previewDelta < 0 ? "text-danger" : previewDelta > 0 ? "text-success" : "text-muted")">
+                    Diferencia: @(previewDelta >= 0 ? "+" : "")@previewDelta uds | Impacto contable: @_currencySymbol @Math.Abs(previewImpact).ToString("N2")
+                </div>
                 <label class="form-label small fw-semibold">Motivo de ajuste / baja</label>
                 <input class="form-control form-control-sm" placeholder="Ej. Daño, muestra, vencimiento..." @bind="_adjustReason" />
             </div>

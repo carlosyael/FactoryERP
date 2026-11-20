@@ -178,4 +178,87 @@ public class BatchQualityServiceTests
         entries[0].Lines.Should().Contain(l => l.Account!.Code == AccountCodes.FinishedGoodsInventory && l.Debit == 200m);
         entries[0].Lines.Should().Contain(l => l.Account!.Code == AccountCodes.RetainedEarnings && l.Credit == 200m);
     }
+
+    [Fact]
+    public async Task QualityRules_AndConcurrentSaleVsQualityUpdate_EnforceStrictGuards()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        await new ChartOfAccountsService(factory).SeedStandardChartAsync();
+        var settings = new SystemSettingService(factory, new MemoryCache(new MemoryCacheOptions()));
+        var accounting = new ManufacturingAccountingService(factory);
+        var prodSvc = new ProductService(factory);
+        var qualitySvc = new BatchQualityService(factory, accounting, new StubCurrentUser(null, "qc.lead"));
+        var customerSvc = new CustomerService(factory, accounting);
+        var saleSvc = new SaleService(factory, settings, accounting, new PendingElectronicInvoiceProvider());
+
+        var prod = await prodSvc.CreateAsync(new Product { Sku = "QC-STR-1", Name = "Crema Estricto", RetailPrice = 500m });
+        var customer = await customerSvc.CreateAsync(new Customer { Name = "Cliente Concurrencia", CustomerType = CustomerType.Retail });
+
+        int expiredId;
+        int liveId;
+        await using (var ctx = await factory.CreateDbContextAsync())
+        {
+            var expiredBatch = new FinishedBatch
+            {
+                ProductId = prod.Id,
+                BatchCode = "LOT-EXPIRED-CHK",
+                ExpirationDate = DateTime.UtcNow.Date.AddDays(-1),
+                InitialQuantity = 5,
+                QuantityRemaining = 5,
+                UnitCost = 100m,
+                QualityStatus = BatchQualityStatus.Quarantine
+            };
+            var liveBatch = new FinishedBatch
+            {
+                ProductId = prod.Id,
+                BatchCode = "LOT-RACE-1",
+                ExpirationDate = DateTime.UtcNow.Date.AddMonths(6),
+                InitialQuantity = 10,
+                QuantityRemaining = 10,
+                UnitCost = 100m,
+                QualityStatus = BatchQualityStatus.Approved
+            };
+            ctx.FinishedBatches.AddRange(expiredBatch, liveBatch);
+            await ctx.SaveChangesAsync();
+            expiredId = expiredBatch.Id;
+            liveId = liveBatch.Id;
+        }
+
+        Func<Task> approveExpired = () => qualitySvc.UpdateQualityStatusAsync(
+            new UpdateBatchQualityRequest(expiredId, BatchQualityStatus.Approved, "Intentar aprobar vencido"));
+        await approveExpired.Should().ThrowAsync<InvalidOperationException>();
+
+        Func<Task> rejectNoNotes = () => qualitySvc.UpdateQualityStatusAsync(
+            new UpdateBatchQualityRequest(liveId, BatchQualityStatus.Rejected, "   "));
+        await rejectNoNotes.Should().ThrowAsync<ArgumentException>();
+
+        Func<Task> invalidStatus = () => qualitySvc.UpdateQualityStatusAsync(
+            new UpdateBatchQualityRequest(liveId, (BatchQualityStatus)99, "Inválido"));
+        await invalidStatus.Should().ThrowAsync<ArgumentOutOfRangeException>();
+
+        Func<Task> noOpAdjust = () => qualitySvc.AdjustBatchQuantityAsync(
+            new AdjustBatchQuantityRequest(liveId, 10, "Sin cambio"));
+        await noOpAdjust.Should().ThrowAsync<InvalidOperationException>();
+
+        var tSale = Task.Run(async () =>
+        {
+            try
+            {
+                await saleSvc.CreateSaleAsync(new CreateSaleRequest(customer.Id, PaymentMethod.Cash, null, "", [new(prod.Id, 6)]));
+                return true;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+        });
+        var tQuarantine = Task.Run(() => qualitySvc.UpdateQualityStatusAsync(
+            new UpdateBatchQualityRequest(liveId, BatchQualityStatus.Quarantine, "Retención concurrente")));
+
+        await Task.WhenAll(tSale, tQuarantine);
+        bool saleSucceeded = await tSale;
+        var refreshed = (await prodSvc.GetBatchesAsync(prod.Id)).First(b => b.Id == liveId);
+        refreshed.QualityStatus.Should().Be(BatchQualityStatus.Quarantine);
+        refreshed.QuantityRemaining.Should().Be(saleSucceeded ? 4 : 10);
+    }
 }

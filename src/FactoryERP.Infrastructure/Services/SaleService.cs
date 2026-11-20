@@ -10,7 +10,6 @@ namespace FactoryERP.Infrastructure.Services;
 
 public sealed class SaleService : ISaleService
 {
-    private static readonly SemaphoreSlim SaleGate = new(1, 1);
     private readonly IDbContextFactory<AppDbContext> _contextFactory;
     private readonly ISystemSettingService _settings;
     private readonly IManufacturingAccountingService _accounting;
@@ -56,7 +55,7 @@ public sealed class SaleService : ISaleService
         decimal maxDiscount = await _settings.GetDecimalAsync(SettingKeys.SalesMaxDiscountPercentage, 30m);
         decimal defaultTaxRate = await _settings.GetDecimalAsync(SettingKeys.FiscalDefaultTaxRate, 0.18m);
 
-        await SaleGate.WaitAsync();
+        await InventoryConcurrencyGate.FinishedBatchGate.WaitAsync();
         try
         {
             Sale sale;
@@ -124,7 +123,7 @@ public sealed class SaleService : ISaleService
         }
         finally
         {
-            SaleGate.Release();
+            InventoryConcurrencyGate.FinishedBatchGate.Release();
         }
     }
 }
