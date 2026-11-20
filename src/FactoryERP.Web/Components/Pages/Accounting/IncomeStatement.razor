@@ -29,8 +29,8 @@
 }
 
 @code {
-    private DateTime _startDate = new(DateTime.Today.Year, 1, 1);
-    private DateTime _endDate = DateTime.Today;
+    private DateTime _startDate = new(DateTime.UtcNow.Year, 1, 1);
+    private DateTime _endDate = DateTime.UtcNow.Date;
     private IncomeStatementDto? _data;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();

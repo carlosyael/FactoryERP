@@ -16,11 +16,15 @@ public static class ServiceRegistrationExtensions
         services.AddHttpContextAccessor();
         services.AddMemoryCache();
 
-        services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<CurrentUserService>();
+        services.AddScoped<ICurrentUserService>(sp => sp.GetRequiredService<CurrentUserService>());
+        services.AddScoped<ICircuitUserAccessor>(sp => sp.GetRequiredService<CurrentUserService>());
         services.AddScoped<ILoadingService, LoadingService>();
         services.AddSingleton<IExternalImageStore, AzureBlobImageStore>();
         services.AddScoped<IFileUploadService, FileUploadService>();
         services.AddScoped<AuditInterceptor>();
+        services.AddScoped<IRoleManagementService, RoleManagementService>();
+        services.AddScoped<IUserManagementService, UserManagementService>();
 
         ConfigureDatabase(services, configuration);
 

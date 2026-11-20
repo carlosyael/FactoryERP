@@ -12,17 +12,23 @@ public partial class InternalCatalog
 {
     [Inject] private ICatalogService CatalogService { get; set; } = default!;
     [Inject] private IProductService ProductService { get; set; } = default!;
+    [Inject] private IBusinessProfileService BusinessProfileService { get; set; } = default!;
     [Inject] private IFileUploadService FileUploadService { get; set; } = default!;
     [Inject] private SweetAlertService Swal { get; set; } = default!;
 
     private List<InternalCatalogItemDto> _items = new();
     private List<string> _lines = new();
+    private string _currency = "RD$";
     private string _search = "";
     private string _selectedLine = "";
     private Product _editing = new();
     private bool _showModal;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        _currency = (await BusinessProfileService.GetProfileAsync()).CurrencySymbol;
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
@@ -54,7 +60,11 @@ public partial class InternalCatalog
 
     private async Task OnImageUploadAsync(InputFileChangeEventArgs e)
     {
-        try { _editing.ImageUrl = await FileUploadService.SaveImageAsync(e.File, "products"); }
+        try
+        {
+            _editing.ImageUrl = await FileUploadService.SaveImageAsync(e.File, "products");
+            await Swal.FireAsync("Imagen cargada", "Guarda el producto para confirmar la nueva foto.", SweetAlertIcon.Success);
+        }
         catch (Exception ex) { await Swal.FireAsync("Error al subir imagen", ex.Message, SweetAlertIcon.Error); }
     }
 

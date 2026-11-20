@@ -18,6 +18,7 @@
                     <div>
                         <span class="badge badge-brand me-1">v@(f.Version)</span>
                         <strong class="fs-6">@f.Name</strong>
+                        @if (!f.IsActive) { <span class="badge bg-secondary ms-1">Inactiva</span> }
                         <div class="small text-muted">Producto: @f.Product?.Name (@f.Product?.Presentation)</div>
                     </div>
                     <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenEditModal(f)"><i class="bi bi-pencil"></i></button>
@@ -92,6 +93,13 @@
                     </div>
                 }
                 <textarea class="form-control form-control-sm mt-2" rows="2" placeholder="Instrucciones de preparación..." @bind="_editing.Instructions"></textarea>
+                @if (_editing.Id != 0)
+                {
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" id="formulaActiveSwitch" @bind="_editing.IsActive" />
+                        <label class="form-check-label small" for="formulaActiveSwitch">Fórmula activa</label>
+                    </div>
+                }
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" @onclick="() => _showModal = false">Cancelar</button>

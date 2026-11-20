@@ -12,11 +12,13 @@ public partial class ProductionOrders
 {
     [Inject] private IProductionOrderService ProductionOrderService { get; set; } = default!;
     [Inject] private IFormulaService FormulaService { get; set; } = default!;
+    [Inject] private IBusinessProfileService BusinessProfileService { get; set; } = default!;
     [Inject] private ILoadingService LoadingService { get; set; } = default!;
     [Inject] private SweetAlertService Swal { get; set; } = default!;
 
     private List<ProductionOrder> _orders = new();
     private List<ProductFormula> _formulas = new();
+    private decimal _defaultLossMargin = 5m;
     private ProductionSimulationDto? _simulation;
     private bool _showCreate;
     private int _selectedFormulaId;
@@ -32,6 +34,7 @@ public partial class ProductionOrders
 
     protected override async Task OnInitializedAsync()
     {
+        _defaultLossMargin = (await BusinessProfileService.GetProfileAsync()).DefaultLossMarginPercent;
         _orders = await ProductionOrderService.GetAllAsync();
         _formulas = await FormulaService.GetAllAsync();
     }
@@ -41,7 +44,7 @@ public partial class ProductionOrders
         var first = _formulas.FirstOrDefault();
         _selectedFormulaId = first?.Id ?? 0;
         _plannedQuantity = first?.BaseYieldQuantity ?? 10;
-        _lossMargin = first?.StandardLossMarginPercent ?? 5m;
+        _lossMargin = first?.StandardLossMarginPercent ?? _defaultLossMargin;
         _batchCode = "";
         _showCreate = true;
         if (_selectedFormulaId > 0) await SimulateAsync();

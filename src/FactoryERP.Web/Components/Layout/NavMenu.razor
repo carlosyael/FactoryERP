@@ -5,9 +5,13 @@
 
 <div class="nav-scrollable py-2">
     <nav class="nav flex-column px-2 gap-1">
-        <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-            <i class="bi bi-speedometer2"></i> Dashboard
-        </NavLink>
+        <AuthorizeView Policy="@Permissions.DashboardView">
+            <Authorized>
+                <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                    <i class="bi bi-speedometer2"></i> Dashboard
+                </NavLink>
+            </Authorized>
+        </AuthorizeView>
 
         @if (_menus != null)
         {
@@ -75,7 +79,8 @@
         if (user.Identity?.IsAuthenticated == true)
         {
             _userName = user.FindFirst("FullName")?.Value ?? user.Identity.Name ?? "Usuario";
-            _userRole = user.FindFirst(ClaimTypes.Role)?.Value ?? "Usuario";
+            var roles = user.FindAll(ClaimTypes.Role).Select(c => c.Value).Distinct().ToList();
+            _userRole = roles.Count > 0 ? string.Join(", ", roles) : "Usuario";
             _menus = await AppMenuService.GetAuthorizedMenusAsync(user);
             StateHasChanged();
         }

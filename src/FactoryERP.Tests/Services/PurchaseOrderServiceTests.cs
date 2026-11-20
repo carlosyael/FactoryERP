@@ -96,4 +96,25 @@ public class PurchaseOrderServiceTests
         po.AmountPaid.Should().Be(500m);
         (await supplierService.GetByIdAsync(supplier.Id))!.CurrentBalance.Should().Be(0m);
     }
+
+    [Fact]
+    public async Task ReceivePurchase_ZeroUnitCostSample_UpdatesStockWithoutAccountingFailure()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        var chart = new ChartOfAccountsService(factory);
+        await chart.SeedStandardChartAsync();
+
+        var settings = new SystemSettingService(factory, new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions()));
+        var accounting = new ManufacturingAccountingService(factory);
+        var supplierService = new SupplierService(factory, accounting);
+        var materialService = new RawMaterialService(factory, accounting);
+        var purchaseService = new PurchaseOrderService(factory, settings, accounting);
+
+        var supplier = await supplierService.CreateAsync(new Supplier { Name = "Suplidor Muestras" });
+        var mat = await materialService.CreateAsync(new RawMaterial { Sku = "MP-SMP-1", Name = "Muestra Fragancia", UnitOfMeasure = UnitOfMeasure.Milliliter });
+
+        var po = await purchaseService.ReceivePurchaseAsync(new(supplier.Id, PaymentMethod.Cash, null, "Muestra gratis", [new(mat.Id, 25m, 0m, IsTaxable: true)]));
+        po.Total.Should().Be(0m);
+        (await materialService.GetByIdAsync(mat.Id))!.CurrentStock.Should().Be(25m);
+    }
 }

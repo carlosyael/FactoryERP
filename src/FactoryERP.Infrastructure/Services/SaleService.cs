@@ -32,7 +32,9 @@ public sealed class SaleService : ISaleService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Sales.AsNoTracking()
-            .Include(s => s.Customer).Include(s => s.Items).ThenInclude(i => i.Product)
+            .Include(s => s.Customer)
+            .Include(s => s.Items).ThenInclude(i => i.Product)
+            .Include(s => s.Items).ThenInclude(i => i.FinishedBatch)
             .OrderByDescending(s => s.SaleDate).ThenByDescending(s => s.Id).ToListAsync();
     }
 
@@ -110,7 +112,10 @@ public sealed class SaleService : ISaleService
                 await tx.CommitAsync();
             }
 
-            await _accounting.PostSaleAsync(sale);
+            if (sale.Total > 0m || sale.TotalCogs > 0m)
+            {
+                await _accounting.PostSaleAsync(sale);
+            }
             return (await GetByIdAsync(sale.Id))!;
         }
         finally

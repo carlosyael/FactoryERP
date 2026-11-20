@@ -97,7 +97,7 @@ public sealed class FinancialReportService : IFinancialReportService
         decimal revenue = revenueLines.Sum(l => l.Amount);
         decimal cogs = costLines.Where(l => l.Code == AccountCodes.CostOfGoodsSold).Sum(l => l.Amount);
         decimal abnormalLoss = costLines.Where(l => l.Code == AccountCodes.AbnormalProductionLoss).Sum(l => l.Amount);
-        decimal grossProfit = revenue - cogs - abnormalLoss;
+        decimal grossProfit = revenue - costLines.Sum(l => l.Amount);
         decimal operatingExpenses = expenseLines.Sum(l => l.Amount);
         decimal netIncome = grossProfit - operatingExpenses;
 

@@ -129,7 +129,10 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
             await tx.CommitAsync();
         }
 
-        await _accounting.PostPurchaseReceiptAsync(order);
+        if (order.Total > 0m)
+        {
+            await _accounting.PostPurchaseReceiptAsync(order);
+        }
         return (await GetByIdAsync(order.Id))!;
     }
 }

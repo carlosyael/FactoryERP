@@ -188,4 +188,47 @@ public class SaleServiceTests
         Func<Task> inactiveAct = () => saleService.CreateSaleAsync(new(salon.Id, PaymentMethod.Cash, null, "", [new(product.Id, 1)]));
         await inactiveAct.Should().ThrowAsync<InvalidOperationException>();
     }
+
+    [Fact]
+    public async Task GetAllAsync_HydratesFinishedBatch_AndZeroTotalSaleDoesNotFailAccounting()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        var (_, salon, saleService, productService, _, _) = await SetupAsync(factory, batch1Qty: 3, batch2Qty: 0);
+
+        var freeProduct = await productService.CreateAsync(new Product
+        {
+            Sku = "PROMO-ZERO",
+            Name = "Ampolla Muestra",
+            RetailPrice = 0m,
+            Cost = 0m,
+            IsTaxable = false
+        });
+
+        await using (var ctx = await factory.CreateDbContextAsync())
+        {
+            ctx.FinishedBatches.Add(new FinishedBatch
+            {
+                ProductId = freeProduct.Id,
+                BatchCode = "LOT-FREE-1",
+                ProductionDate = DateTime.UtcNow,
+                InitialQuantity = 5,
+                QuantityRemaining = 5,
+                UnitCost = 0m
+            });
+            await ctx.SaveChangesAsync();
+        }
+
+        var sale = await saleService.CreateSaleAsync(new CreateSaleRequest(
+            salon.Id, PaymentMethod.Cash, DateTime.UtcNow, "Entrega promocional",
+            [new(freeProduct.Id, 2, UnitPriceOverride: 0m)]));
+
+        sale.Total.Should().Be(0m);
+        sale.TotalCogs.Should().Be(0m);
+
+        var list = await saleService.GetAllAsync();
+        list.Should().ContainSingle();
+        list[0].Items.Should().ContainSingle();
+        list[0].Items[0].FinishedBatch.Should().NotBeNull();
+        list[0].Items[0].FinishedBatch!.BatchCode.Should().Be("LOT-FREE-1");
+    }
 }

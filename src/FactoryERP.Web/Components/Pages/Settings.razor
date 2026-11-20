@@ -55,6 +55,13 @@
                 </div>
                 <div>
                     <label class="form-label small fw-semibold">Logo del Comercio (JPG/PNG/WEBP máx. 5 MB)</label>
+                    @if (!string.IsNullOrWhiteSpace(_model.LogoUrl))
+                    {
+                        <div class="mb-2 d-flex align-items-center gap-2">
+                            <img src="@_model.LogoUrl" alt="Logo actual" class="rounded border" style="width: 48px; height: 48px; object-fit: cover;" />
+                            <small class="text-muted text-truncate">@_model.LogoUrl</small>
+                        </div>
+                    }
                     <InputFile class="form-control mb-2" OnChange="OnLogoUploadAsync" accept=".jpg,.jpeg,.png,.webp" />
                     <input class="form-control form-control-sm" @bind="_model.LogoUrl" placeholder="O pegue URL pública del logo" />
                 </div>

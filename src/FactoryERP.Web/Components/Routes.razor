@@ -5,7 +5,21 @@
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)">
                 <NotAuthorized>
-                    <RedirectToLogin />
+                    @if (context.User.Identity?.IsAuthenticated == true)
+                    {
+                        <LayoutView Layout="typeof(MainLayout)">
+                            <div class="container py-5 text-center">
+                                <i class="bi bi-shield-lock text-warning display-4 mb-2 d-block"></i>
+                                <h3 class="fw-bold">Acceso restringido</h3>
+                                <p class="text-muted">Tu rol actual no tiene permisos suficientes para acceder a esta sección.</p>
+                                <a href="/" class="btn btn-brand btn-sm">Ir al Panel Principal</a>
+                            </div>
+                        </LayoutView>
+                    }
+                    else
+                    {
+                        <RedirectToLogin />
+                    }
                 </NotAuthorized>
                 <Authorizing>
                     <div class="d-flex justify-content-center align-items-center vh-100">

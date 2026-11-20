@@ -3,6 +3,7 @@ using FactoryERP.Core.Interfaces;
 using FactoryERP.Infrastructure.Data;
 using FactoryERP.Infrastructure.Interceptors;
 using FluentAssertions;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Moq;
@@ -45,5 +46,11 @@ public class AuditInterceptorTests
         var secretLog = logs.First(l => l.EntityName == nameof(SystemSetting));
         secretLog.NewValues.Should().Contain("********");
         secretLog.NewValues.Should().NotContain("SuperSecret123!");
+
+        ctx.DataProtectionKeys.Add(new DataProtectionKey { FriendlyName = "key-1", Xml = "<key><secret>TOP_SECRET_KEY_MATERIAL</secret></key>" });
+        await ctx.SaveChangesAsync();
+
+        var afterLogs = await ctx.AuditLogs.ToListAsync();
+        afterLogs.Should().NotContain(l => l.EntityName == nameof(DataProtectionKey));
     }
 }

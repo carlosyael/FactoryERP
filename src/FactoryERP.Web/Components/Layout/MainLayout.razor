@@ -1,5 +1,7 @@
 @inherits LayoutComponentBase
 @inject IBusinessProfileService BusinessProfileService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject FactoryERP.Web.Services.ICircuitUserAccessor CircuitUserAccessor
 @implements IDisposable
 
 <GlobalLoadingOverlay />
@@ -57,6 +59,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        CircuitUserAccessor.SetUser(authState.User);
         BusinessProfileService.OnProfileChanged += HandleProfileChanged;
         _profile = await BusinessProfileService.GetProfileAsync();
     }

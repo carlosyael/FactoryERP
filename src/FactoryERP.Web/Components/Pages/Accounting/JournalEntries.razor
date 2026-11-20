@@ -10,8 +10,12 @@
         <input type="date" class="form-control form-control-sm" style="width:auto;" @bind="_startDate" />
         <input type="date" class="form-control form-control-sm" style="width:auto;" @bind="_endDate" />
         <button class="btn btn-outline-primary btn-sm" @onclick="LoadEntriesAsync">Filtrar</button>
-        <button class="btn btn-outline-secondary btn-sm" @onclick="OpenExpenseModal"><i class="bi bi-cash-stack me-1"></i> Registrar Gasto</button>
-        <button class="btn btn-brand btn-sm" @onclick="OpenManualModal"><i class="bi bi-plus-lg me-1"></i> Asiento Manual</button>
+        <AuthorizeView Policy="@Permissions.AccountingManage">
+            <Authorized>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="OpenExpenseModal"><i class="bi bi-cash-stack me-1"></i> Registrar Gasto</button>
+                <button class="btn btn-brand btn-sm" @onclick="OpenManualModal"><i class="bi bi-plus-lg me-1"></i> Asiento Manual</button>
+            </Authorized>
+        </AuthorizeView>
     </div>
 </div>
 
@@ -25,14 +29,18 @@
             </div>
             <div class="d-flex align-items-center gap-2">
                 <span class="badge @(entry.Status == JournalEntryStatus.Posted ? "bg-success" : entry.Status == JournalEntryStatus.Draft ? "bg-warning text-dark" : "bg-danger")">@entry.Status</span>
-                @if (entry.Status == JournalEntryStatus.Draft)
-                {
-                    <button class="btn btn-sm btn-outline-success py-0" @onclick="() => PostEntryAsync(entry.Id)">Mayorizar</button>
-                }
-                @if (entry.Status != JournalEntryStatus.Voided)
-                {
-                    <button class="btn btn-sm btn-outline-danger py-0" @onclick="() => VoidEntryAsync(entry.Id)">Anular</button>
-                }
+                <AuthorizeView Policy="@Permissions.AccountingManage">
+                    <Authorized>
+                        @if (entry.Status == JournalEntryStatus.Draft)
+                        {
+                            <button class="btn btn-sm btn-outline-success py-0" @onclick="() => PostEntryAsync(entry.Id)">Mayorizar</button>
+                        }
+                        @if (entry.Status != JournalEntryStatus.Voided)
+                        {
+                            <button class="btn btn-sm btn-outline-danger py-0" @onclick="() => VoidEntryAsync(entry.Id)">Anular</button>
+                        }
+                    </Authorized>
+                </AuthorizeView>
             </div>
         </div>
         <table class="table table-sm mb-0">
@@ -112,7 +120,8 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" @onclick="() => _showManual = false">Cancelar</button>
-                <button class="btn btn-brand" @onclick="SaveManualAsync">Mayorizar Asiento</button>
+                <button class="btn btn-outline-primary" @onclick="() => SaveManualAsync(false)">Guardar Borrador</button>
+                <button class="btn btn-brand" @onclick="() => SaveManualAsync(true)">Mayorizar Asiento</button>
             </div>
         </div></div>
     </div>

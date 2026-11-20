@@ -20,7 +20,8 @@ internal static class ProductionExecutionHelper
         decimal matCost = 0m;
         foreach (var item in order.Materials.OrderBy(m => m.RawMaterialId))
         {
-            var mat = materials[item.RawMaterialId];
+            if (!materials.TryGetValue(item.RawMaterialId, out var mat))
+                throw new InvalidOperationException($"Materia prima ID {item.RawMaterialId} no encontrada.");
             if (mat.CurrentStock < item.PlannedQuantity)
                 throw new InvalidOperationException(
                     $"Stock insuficiente de '{mat.Name}'. Requerido: {item.PlannedQuantity:N2}, Disponible: {mat.CurrentStock:N2}.");

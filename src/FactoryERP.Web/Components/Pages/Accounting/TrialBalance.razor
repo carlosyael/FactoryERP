@@ -20,38 +20,40 @@
         Estado del cuadre: <strong>@(_data.IsBalanced ? "CUADRADA (Débito == Crédito)" : "DESCUADRADA")</strong>
     </div>
     <div class="card p-3">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-                <tr><th>Código</th><th>Cuenta</th><th class="text-end">Débitos</th><th class="text-end">Créditos</th><th class="text-end">Saldo Deudor</th><th class="text-end">Saldo Acreedor</th></tr>
-            </thead>
-            <tbody>
-                @foreach (var r in _data.Rows)
-                {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr><th>Código</th><th>Cuenta</th><th class="text-end">Débitos</th><th class="text-end">Créditos</th><th class="text-end">Saldo Deudor</th><th class="text-end">Saldo Acreedor</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _data.Rows)
+                    {
+                        <tr>
+                            <td><code>@r.Code</code></td><td>@r.Name</td>
+                            <td class="text-end">RD$ @r.TotalDebit.ToString("N2")</td>
+                            <td class="text-end">RD$ @r.TotalCredit.ToString("N2")</td>
+                            <td class="text-end">RD$ @r.DebitBalance.ToString("N2")</td>
+                            <td class="text-end">RD$ @r.CreditBalance.ToString("N2")</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot class="fw-bold table-light">
                     <tr>
-                        <td><code>@r.Code</code></td><td>@r.Name</td>
-                        <td class="text-end">RD$ @r.TotalDebit.ToString("N2")</td>
-                        <td class="text-end">RD$ @r.TotalCredit.ToString("N2")</td>
-                        <td class="text-end">RD$ @r.DebitBalance.ToString("N2")</td>
-                        <td class="text-end">RD$ @r.CreditBalance.ToString("N2")</td>
+                        <td colspan="2">TOTALES</td>
+                        <td class="text-end">RD$ @_data.TotalDebit.ToString("N2")</td>
+                        <td class="text-end">RD$ @_data.TotalCredit.ToString("N2")</td>
+                        <td class="text-end">RD$ @_data.TotalDebitBalance.ToString("N2")</td>
+                        <td class="text-end">RD$ @_data.TotalCreditBalance.ToString("N2")</td>
                     </tr>
-                }
-            </tbody>
-            <tfoot class="fw-bold table-light">
-                <tr>
-                    <td colspan="2">TOTALES</td>
-                    <td class="text-end">RD$ @_data.TotalDebit.ToString("N2")</td>
-                    <td class="text-end">RD$ @_data.TotalCredit.ToString("N2")</td>
-                    <td class="text-end">RD$ @_data.TotalDebitBalance.ToString("N2")</td>
-                    <td class="text-end">RD$ @_data.TotalCreditBalance.ToString("N2")</td>
-                </tr>
-            </tfoot>
-        </table>
+                </tfoot>
+            </table>
+        </div>
     </div>
 }
 
 @code {
-    private DateTime _startDate = new(DateTime.Today.Year, 1, 1);
-    private DateTime _endDate = DateTime.Today;
+    private DateTime _startDate = new(DateTime.UtcNow.Year, 1, 1);
+    private DateTime _endDate = DateTime.UtcNow.Date;
     private TrialBalanceDto? _data;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();

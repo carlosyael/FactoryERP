@@ -43,4 +43,29 @@ public class BusinessProfileServiceTests
         reloaded.WhatsAppNumber.Should().Be("18095559999");
         reloaded.PrimaryColor.Should().Be("#7c2d12");
     }
+
+    [Fact]
+    public async Task UpdateProfileAsync_InvalidNameOrNumericRanges_ThrowsArgumentException()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var settingService = new SystemSettingService(factory, cache);
+        var profileService = new BusinessProfileService(settingService);
+        var valid = await profileService.GetProfileAsync();
+
+        Func<Task> emptyName = () => profileService.UpdateProfileAsync(valid with { BusinessName = "   " });
+        await emptyName.Should().ThrowAsync<ArgumentException>();
+
+        Func<Task> badTax = () => profileService.UpdateProfileAsync(valid with { DefaultTaxRate = 18m });
+        await badTax.Should().ThrowAsync<ArgumentException>();
+
+        Func<Task> badDisc = () => profileService.UpdateProfileAsync(valid with { MaxDiscountPercentage = 105m });
+        await badDisc.Should().ThrowAsync<ArgumentException>();
+
+        Func<Task> badLoss = () => profileService.UpdateProfileAsync(valid with { DefaultLossMarginPercent = 100m });
+        await badLoss.Should().ThrowAsync<ArgumentException>();
+
+        Func<Task> badTol = () => profileService.UpdateProfileAsync(valid with { AbnormalLossTolerancePercent = 51m });
+        await badTol.Should().ThrowAsync<ArgumentException>();
+    }
 }

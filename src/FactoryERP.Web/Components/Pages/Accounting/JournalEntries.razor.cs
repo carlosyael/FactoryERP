@@ -15,8 +15,8 @@ public partial class JournalEntries
 
     private List<JournalEntry> _entries = new();
     private List<AccountingAccount> _postableAccounts = new();
-    private DateTime _startDate = DateTime.Today.AddMonths(-1);
-    private DateTime _endDate = DateTime.Today;
+    private DateTime _startDate = DateTime.UtcNow.Date.AddMonths(-1);
+    private DateTime _endDate = DateTime.UtcNow.Date;
 
     private bool _showExpense;
     private string _expAccountCode = AccountCodes.OperatingExpenses;
@@ -74,17 +74,20 @@ public partial class JournalEntries
         catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
     }
 
-    private async Task SaveManualAsync()
+    private async Task SaveManualAsync(bool postImmediately)
     {
         try
         {
             var req = new CreateJournalEntryRequest(
-                DateTime.UtcNow, _concept, _reference, true,
+                DateTime.UtcNow, _concept, _reference, postImmediately,
                 _manualLines.Select(l => new CreateJournalEntryLineRequest(l.AccountId, l.Debit, l.Credit, _concept)).ToList());
             await JournalService.CreateAsync(req);
             _showManual = false;
             await LoadEntriesAsync();
-            await Swal.FireAsync("Asiento mayorizado", "Registro guardado.", SweetAlertIcon.Success);
+            await Swal.FireAsync(
+                postImmediately ? "Asiento mayorizado" : "Borrador guardado",
+                postImmediately ? "Registro contabilizado." : "El asiento quedó en borrador para revisión.",
+                SweetAlertIcon.Success);
         }
         catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
     }
@@ -113,8 +116,13 @@ public partial class JournalEntries
         });
         if (!confirm.IsConfirmed) return;
 
-        await JournalService.VoidAsync(entryId);
-        await LoadEntriesAsync();
+        try
+        {
+            await JournalService.VoidAsync(entryId);
+            await LoadEntriesAsync();
+            await Swal.FireAsync("Asiento anulado", "El registro fue excluido de los reportes.", SweetAlertIcon.Info);
+        }
+        catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
     }
 
     private sealed class EditableLine

@@ -1,23 +1,51 @@
 @page "/roles"
 @attribute [Authorize(Policy = Permissions.UsersManage)]
-@using Microsoft.AspNetCore.Identity
-@inject RoleManager<IdentityRole> RoleManager
 
-<div class="mb-3">
-    <h3 class="fw-bold mb-0">Roles y Permisos</h3>
-    <small class="text-muted">Matriz de autorización por claims del sistema</small>
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div>
+        <h3 class="fw-bold mb-0">Roles y Permisos</h3>
+        <small class="text-muted">Define roles personalizados y controla los permisos por módulo</small>
+    </div>
+    <button class="btn btn-brand btn-sm" @onclick="OpenCreateModal">
+        <i class="bi bi-shield-plus me-1"></i> Nuevo Rol
+    </button>
 </div>
 
 <div class="row g-3">
-    @foreach (var (role, claims) in _roleClaims)
+    @foreach (var role in _roles)
     {
         <div class="col-md-6">
-            <div class="card p-3 h-100">
-                <h6 class="fw-bold text-brand mb-2">@role</h6>
-                <div class="d-flex flex-wrap gap-1">
-                    @foreach (var perm in claims)
+            <div class="card p-3 h-100 d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <div class="d-flex align-items-center gap-2">
+                            <h6 class="fw-bold text-brand mb-0">@role.Name</h6>
+                            <span class="badge @(role.IsSystemRole ? "bg-primary-subtle text-primary-emphasis" : "bg-secondary-subtle text-body")">
+                                @(role.IsSystemRole ? "Sistema" : "Personalizado")
+                            </span>
+                        </div>
+                        <small class="text-muted">@role.AssignedUsersCount usuario(s) asignado(s) • @role.Permissions.Count permiso(s)</small>
+                    </div>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-sm btn-outline-secondary" title="Editar permisos" @onclick="() => OpenEditModal(role)">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        @if (!role.IsSystemRole)
+                        {
+                            <button class="btn btn-sm btn-outline-danger" title="Eliminar rol" @onclick="() => DeleteRoleAsync(role)">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        }
+                    </div>
+                </div>
+                <div class="d-flex flex-wrap gap-1 mt-auto pt-2 border-top">
+                    @if (role.Permissions.Count == 0)
                     {
-                        <span class="badge bg-secondary-subtle text-body">@perm</span>
+                        <span class="small text-muted fst-italic">Sin permisos asignados</span>
+                    }
+                    @foreach (var permCode in role.Permissions)
+                    {
+                        <span class="badge bg-secondary-subtle text-body" title="@permCode">@GetDisplayName(permCode)</span>
                     }
                 </div>
             </div>
@@ -25,15 +53,62 @@
     }
 </div>
 
-@code {
-    private readonly Dictionary<string, List<string>> _roleClaims = new();
+@if (_showModal)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.45);">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_editingRoleId is null ? "Nuevo Rol" : $"Editar Rol: {_roleName}")</h5>
+                    <button type="button" class="btn-close" @onclick="() => _showModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Nombre del Rol</label>
+                        <input class="form-control" @bind="_roleName" disabled="@_isEditingAdmin" placeholder="Ej. Supervisor de Planta" />
+                        @if (_isEditingAdmin)
+                        {
+                            <small class="text-muted">El rol Admin del sistema no puede renombrarse y conserva permisos administrativos críticos.</small>
+                        }
+                    </div>
 
-    protected override async Task OnInitializedAsync()
-    {
-        foreach (var role in RoleManager.Roles.OrderBy(r => r.Name).ToList())
-        {
-            var claims = await RoleManager.GetClaimsAsync(role);
-            _roleClaims[role.Name ?? ""] = claims.Where(c => c.Type == "Permission").Select(c => c.Value).OrderBy(v => v).ToList();
-        }
-    }
+                    @foreach (var group in _permissionGroups)
+                    {
+                        bool allSelected = group.All(p => _selectedPermissions.Contains(p.Code));
+                        <div class="border rounded p-2 mb-2">
+                            <div class="d-flex justify-content-between align-items-center mb-2 pb-1 border-bottom">
+                                <strong class="small text-brand">@group.Key</strong>
+                                <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none"
+                                        @onclick="() => ToggleGroup(group.Key, !allSelected)">
+                                    @(allSelected ? "Quitar todo" : "Seleccionar todo")
+                                </button>
+                            </div>
+                            <div class="row g-2">
+                                @foreach (var perm in group)
+                                {
+                                    bool locked = IsLockedAdminPermission(perm.Code);
+                                    bool isChecked = _selectedPermissions.Contains(perm.Code);
+                                    <div class="col-md-6">
+                                        <label class="form-check small d-flex align-items-start gap-2 mb-0">
+                                            <input type="checkbox" class="form-check-input mt-1" checked="@isChecked"
+                                                   disabled="@locked"
+                                                   @onchange="e => TogglePermission(perm.Code, e.Value is bool b && b)" />
+                                            <span>
+                                                <span class="fw-semibold d-block">@perm.DisplayName</span>
+                                                <span class="text-muted">@perm.Description</span>
+                                            </span>
+                                        </label>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="() => _showModal = false">Cancelar</button>
+                    <button class="btn btn-brand" @onclick="SaveRoleAsync">Guardar Rol</button>
+                </div>
+            </div>
+        </div>
+    </div>
 }

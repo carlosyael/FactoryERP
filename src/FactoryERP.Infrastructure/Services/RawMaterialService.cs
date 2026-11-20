@@ -34,6 +34,8 @@ public sealed class RawMaterialService : IRawMaterialService
 
     public async Task<RawMaterial> CreateAsync(RawMaterial material)
     {
+        if (string.IsNullOrWhiteSpace(material.Sku))
+            throw new ArgumentException("El SKU del material es obligatorio.");
         if (string.IsNullOrWhiteSpace(material.Name))
             throw new ArgumentException("El nombre del material es obligatorio.");
         if (material.CurrentStock < 0m || material.AverageCost < 0m || material.MinimumStockLevel < 0m)
@@ -53,6 +55,8 @@ public sealed class RawMaterialService : IRawMaterialService
 
     public async Task UpdateAsync(RawMaterial material)
     {
+        if (string.IsNullOrWhiteSpace(material.Sku))
+            throw new ArgumentException("El SKU del material es obligatorio.");
         if (string.IsNullOrWhiteSpace(material.Name))
             throw new ArgumentException("El nombre del material es obligatorio.");
 

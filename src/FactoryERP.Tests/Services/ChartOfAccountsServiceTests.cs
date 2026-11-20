@@ -47,4 +47,30 @@ public class ChartOfAccountsServiceTests
 
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
+
+    [Fact]
+    public async Task CreateAndUpdate_RejectsEmptyCodeOrName_AndUpdatesNameAndStatus()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        var service = new ChartOfAccountsService(factory);
+
+        Func<Task> emptyCodeCreate = () => service.CreateAsync(new AccountingAccount { Code = "  ", Name = "Válida", Group = AccountGroup.Gastos });
+        await emptyCodeCreate.Should().ThrowAsync<ArgumentException>();
+
+        Func<Task> emptyNameCreate = () => service.CreateAsync(new AccountingAccount { Code = "6199", Name = " ", Group = AccountGroup.Gastos });
+        await emptyNameCreate.Should().ThrowAsync<ArgumentException>();
+
+        var created = await service.CreateAsync(new AccountingAccount { Code = "6199", Name = "Gasto Misceláneo", Group = AccountGroup.Gastos });
+        created.Name = "Gastos Generales Planta";
+        created.IsActive = false;
+        await service.UpdateAsync(created);
+
+        var reloaded = await service.GetByIdAsync(created.Id);
+        reloaded!.Name.Should().Be("Gastos Generales Planta");
+        reloaded.IsActive.Should().BeFalse();
+
+        created.Name = "";
+        Func<Task> emptyNameUpdate = () => service.UpdateAsync(created);
+        await emptyNameUpdate.Should().ThrowAsync<ArgumentException>();
+    }
 }

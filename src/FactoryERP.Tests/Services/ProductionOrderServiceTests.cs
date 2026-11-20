@@ -224,4 +224,42 @@ public class ProductionOrderServiceTests
         Func<Task> cancelCompleted = () => prodService.CancelProductionAsync(draft2.Id, "Tarde");
         await cancelCompleted.Should().ThrowAsync<InvalidOperationException>();
     }
+
+    [Fact]
+    public async Task ProductionLifecycle_ZeroCostMaterialsAndOverhead_DoesNotFailPostCommitAccounting()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        var chart = new ChartOfAccountsService(factory);
+        await chart.SeedStandardChartAsync();
+        var settings = new SystemSettingService(factory, new MemoryCache(new MemoryCacheOptions()));
+        var accounting = new ManufacturingAccountingService(factory);
+        var matSvc = new RawMaterialService(factory);
+        var prodSvc = new ProductService(factory);
+        var formulaSvc = new FormulaService(factory);
+        var orderSvc = new ProductionOrderService(factory, settings, accounting);
+
+        var prod = await prodSvc.CreateAsync(new Product { Sku = "ZERO-P1", Name = "Muestra Capilar", RetailPrice = 100m });
+        var mat = await matSvc.CreateAsync(new RawMaterial { Sku = "ZERO-M1", Name = "Muestra Base", UnitOfMeasure = UnitOfMeasure.Gram, CurrentStock = 500m, AverageCost = 0m });
+        var formula = await formulaSvc.CreateAsync(new ProductFormula
+        {
+            ProductId = prod.Id,
+            Name = "Receta Muestra",
+            Version = "1.0",
+            BaseYieldQuantity = 5,
+            StandardLossMarginPercent = 0m,
+            OverheadCostPerBatch = 0m,
+            Items = [new() { RawMaterialId = mat.Id, QuantityRequired = 100m, UnitOfMeasure = UnitOfMeasure.Gram }]
+        });
+
+        var o1 = await orderSvc.CreateDraftAsync(new CreateProductionOrderRequest(formula.Id, 5, 0m, null, null, "LOT-Z-1"));
+        await orderSvc.StartProductionAsync(o1.Id);
+        var completed = await orderSvc.CompleteProductionAsync(new CompleteProductionRequest(o1.Id, 5, 0m, null));
+        completed.Status.Should().Be(ProductionOrderStatus.Completed);
+
+        var o2 = await orderSvc.CreateDraftAsync(new CreateProductionOrderRequest(formula.Id, 5, 0m, null, null, "LOT-Z-2"));
+        await orderSvc.StartProductionAsync(o2.Id);
+        var cancelled = await orderSvc.CancelProductionAsync(o2.Id, "Prueba costo cero");
+        cancelled.Status.Should().Be(ProductionOrderStatus.Cancelled);
+        (await matSvc.GetByIdAsync(mat.Id))!.CurrentStock.Should().Be(400m);
+    }
 }

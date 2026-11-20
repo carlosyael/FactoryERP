@@ -83,6 +83,7 @@ public partial class Sales
             _selectedSale = await SaleService.CreateSaleAsync(req);
             _showNewModal = false;
             _sales = await SaleService.GetAllAsync();
+            _customers = await CustomerService.GetAllAsync();
             _products = await ProductService.GetAllAsync();
             await Swal.FireAsync("Venta completada", $"Comprobante {_selectedSale.SaleNumber} emitido.", SweetAlertIcon.Success);
         }

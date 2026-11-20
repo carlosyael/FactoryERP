@@ -54,7 +54,7 @@
 }
 
 @code {
-    private DateTime _asOfDate = DateTime.Today;
+    private DateTime _asOfDate = DateTime.UtcNow.Date;
     private BalanceSheetDto? _data;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();

@@ -8,63 +8,106 @@
         <h3 class="fw-bold mb-0">Plan de Cuentas Industrial</h3>
         <small class="text-muted">Activos (MP, WIP, Terminados), Pasivos, Capital, Ingresos, Costos y Gastos</small>
     </div>
-    <button class="btn btn-brand btn-sm" @onclick="() => { _newAcc = new AccountingAccount(); _showModal = true; }">
-        <i class="bi bi-plus-lg me-1"></i> Nueva Cuenta
-    </button>
+    <AuthorizeView Policy="@Permissions.AccountingManage">
+        <Authorized>
+            <button class="btn btn-brand btn-sm" @onclick="OpenCreateModal">
+                <i class="bi bi-plus-lg me-1"></i> Nueva Cuenta
+            </button>
+        </Authorized>
+    </AuthorizeView>
 </div>
 
 <div class="card p-3">
-    <table class="table table-hover align-middle mb-0">
-        <thead class="table-light"><tr><th>Código</th><th>Nombre</th><th>Grupo</th><th>Tipo</th><th>Estado</th></tr></thead>
-        <tbody>
-            @foreach (var acc in _accounts)
-            {
-                <tr class="@(acc.IsControlAccount ? "fw-bold table-light" : "")">
-                    <td><code>@acc.Code</code></td>
-                    <td>@acc.Name</td>
-                    <td>@acc.Group</td>
-                    <td>@(acc.IsControlAccount ? "Control" : "Movimiento")</td>
-                    <td><span class="badge @(acc.IsActive ? "bg-success" : "bg-secondary")">@(acc.IsActive ? "Activa" : "Inactiva")</span></td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr><th>Código</th><th>Nombre</th><th>Grupo</th><th>Tipo</th><th>Estado</th><th class="text-end">Acción</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var acc in _accounts)
+                {
+                    <tr class="@(acc.IsControlAccount ? "fw-bold table-light" : "")">
+                        <td><code>@acc.Code</code></td>
+                        <td>@acc.Name</td>
+                        <td>@acc.Group</td>
+                        <td>@(acc.IsControlAccount ? "Control" : "Movimiento")</td>
+                        <td><span class="badge @(acc.IsActive ? "bg-success" : "bg-secondary")">@(acc.IsActive ? "Activa" : "Inactiva")</span></td>
+                        <td class="text-end">
+                            <AuthorizeView Policy="@Permissions.AccountingManage">
+                                <Authorized>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenEditModal(acc)">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                </Authorized>
+                            </AuthorizeView>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
 </div>
 
 @if (_showModal)
 {
     <div class="modal fade show d-block" style="background: rgba(0,0,0,0.45);">
         <div class="modal-dialog modal-sm"><div class="modal-content">
-            <div class="modal-header"><h6 class="modal-title">Nueva Cuenta Contable</h6><button class="btn-close" @onclick="() => _showModal = false"></button></div>
+            <div class="modal-header">
+                <h6 class="modal-title">@(_editingAcc.Id == 0 ? "Nueva Cuenta Contable" : $"Editar Cuenta {_editingAcc.Code}")</h6>
+                <button class="btn-close" @onclick="() => _showModal = false"></button>
+            </div>
             <div class="modal-body">
-                <label class="form-label small">Código</label><input class="form-control mb-2" @bind="_newAcc.Code" />
-                <label class="form-label small">Nombre</label><input class="form-control mb-2" @bind="_newAcc.Name" />
+                <label class="form-label small">Código</label>
+                <input class="form-control mb-2" @bind="_editingAcc.Code" />
+                <label class="form-label small">Nombre</label>
+                <input class="form-control mb-2" @bind="_editingAcc.Name" />
                 <label class="form-label small">Grupo</label>
-                <select class="form-select mb-2" @bind="_newAcc.Group">
+                <select class="form-select mb-2" @bind="_editingAcc.Group">
                     @foreach (var g in Enum.GetValues<AccountGroup>()) { <option value="@g">@g</option> }
                 </select>
-                <div class="form-check"><input class="form-check-input" type="checkbox" @bind="_newAcc.IsControlAccount" /><label class="form-check-label small">Cuenta control</label></div>
+                <div class="form-check mb-1"><input class="form-check-input" type="checkbox" @bind="_editingAcc.IsControlAccount" /><label class="form-check-label small">Cuenta control</label></div>
+                @if (_editingAcc.Id != 0)
+                {
+                    <div class="form-check form-switch"><input class="form-check-input" type="checkbox" @bind="_editingAcc.IsActive" /><label class="form-check-label small">Cuenta activa</label></div>
+                }
             </div>
-            <div class="modal-footer"><button class="btn btn-brand btn-sm" @onclick="SaveAsync">Crear</button></div>
+            <div class="modal-footer"><button class="btn btn-brand btn-sm" @onclick="SaveAsync">Guardar</button></div>
         </div></div>
     </div>
 }
 
 @code {
     private List<AccountingAccount> _accounts = new();
-    private AccountingAccount _newAcc = new();
+    private AccountingAccount _editingAcc = new();
     private bool _showModal;
 
     protected override async Task OnInitializedAsync() => _accounts = await ChartService.GetAllAsync();
+
+    private void OpenCreateModal()
+    {
+        _editingAcc = new AccountingAccount { IsActive = true };
+        _showModal = true;
+    }
+
+    private void OpenEditModal(AccountingAccount acc)
+    {
+        _editingAcc = new AccountingAccount
+        {
+            Id = acc.Id, Code = acc.Code, Name = acc.Name, Group = acc.Group,
+            IsControlAccount = acc.IsControlAccount, IsActive = acc.IsActive, ParentAccountId = acc.ParentAccountId
+        };
+        _showModal = true;
+    }
 
     private async Task SaveAsync()
     {
         try
         {
-            await ChartService.CreateAsync(_newAcc);
+            if (_editingAcc.Id == 0) await ChartService.CreateAsync(_editingAcc);
+            else await ChartService.UpdateAsync(_editingAcc);
             _showModal = false;
             _accounts = await ChartService.GetAllAsync();
-            await Swal.FireAsync("Cuenta creada", "Plan de cuentas actualizado.", SweetAlertIcon.Success);
+            await Swal.FireAsync("Cuenta guardada", "Plan de cuentas actualizado.", SweetAlertIcon.Success);
         }
         catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
     }

@@ -119,7 +119,7 @@ public sealed class ProductionOrderService : IProductionOrderService
                 await tx.CommitAsync();
             }
 
-            await _accounting.PostProductionStartAsync(order, matCost);
+            if (matCost > 0m) await _accounting.PostProductionStartAsync(order, matCost);
             return (await GetByIdAsync(order.Id))!;
         }
         finally
@@ -147,7 +147,8 @@ public sealed class ProductionOrderService : IProductionOrderService
                 await tx.CommitAsync();
             }
 
-            await _accounting.PostProductionCompletionAsync(order);
+            if (order.ActualMaterialCost + order.ActualOverheadCost > 0m)
+                await _accounting.PostProductionCompletionAsync(order);
             return (await GetByIdAsync(order.Id))!;
         }
         finally
@@ -175,7 +176,8 @@ public sealed class ProductionOrderService : IProductionOrderService
                 await tx.CommitAsync();
             }
 
-            if (hadWip) await _accounting.PostProductionCancellationAsync(order);
+            if (hadWip && order.ActualMaterialCost > 0m)
+                await _accounting.PostProductionCancellationAsync(order);
             return (await GetByIdAsync(order.Id))!;
         }
         finally

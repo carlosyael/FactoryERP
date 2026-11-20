@@ -46,6 +46,11 @@ public sealed class ChartOfAccountsService : IChartOfAccountsService
 
     public async Task<AccountingAccount> CreateAsync(AccountingAccount account)
     {
+        if (string.IsNullOrWhiteSpace(account.Code))
+            throw new ArgumentException("El código de la cuenta es obligatorio.", nameof(account));
+        if (string.IsNullOrWhiteSpace(account.Name))
+            throw new ArgumentException("El nombre de la cuenta es obligatorio.", nameof(account));
+
         await using var context = await _contextFactory.CreateDbContextAsync();
         string normalizedCode = account.Code.Trim();
         if (await context.AccountingAccounts.AnyAsync(a => a.Code == normalizedCode))
@@ -62,6 +67,11 @@ public sealed class ChartOfAccountsService : IChartOfAccountsService
 
     public async Task UpdateAsync(AccountingAccount account)
     {
+        if (string.IsNullOrWhiteSpace(account.Code))
+            throw new ArgumentException("El código de la cuenta es obligatorio.", nameof(account));
+        if (string.IsNullOrWhiteSpace(account.Name))
+            throw new ArgumentException("El nombre de la cuenta es obligatorio.", nameof(account));
+
         await using var context = await _contextFactory.CreateDbContextAsync();
         var existing = await context.AccountingAccounts.FindAsync(account.Id)
             ?? throw new InvalidOperationException("Cuenta contable no encontrada.");

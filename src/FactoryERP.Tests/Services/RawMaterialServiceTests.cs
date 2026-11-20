@@ -71,5 +71,12 @@ public class RawMaterialServiceTests
         m2.Sku = m1.Sku;
         Func<Task> act = () => service.UpdateAsync(m2);
         await act.Should().ThrowAsync<InvalidOperationException>();
+
+        Func<Task> emptyCreate = () => service.CreateAsync(new RawMaterial { Sku = "  ", Name = "Sin SKU" });
+        await emptyCreate.Should().ThrowAsync<ArgumentException>();
+
+        m2.Sku = "   ";
+        Func<Task> emptyUpdate = () => service.UpdateAsync(m2);
+        await emptyUpdate.Should().ThrowAsync<ArgumentException>();
     }
 }

@@ -10,47 +10,63 @@
 </div>
 
 <div class="card p-3">
-    <table class="table table-hover align-middle mb-0">
-        <thead class="table-light">
-            <tr>
-                <th>Suplidor</th><th>RNC</th><th>Teléfono</th><th>Contacto</th><th>Balance CxP</th><th class="text-end">Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var s in _suppliers)
-            {
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
                 <tr>
-                    <td class="fw-semibold">@s.Name</td>
-                    <td>@s.Rnc</td>
-                    <td>@s.Phone</td>
-                    <td>@s.ContactPerson</td>
-                    <td class="fw-bold @(s.CurrentBalance > 0 ? "text-danger" : "text-success")">RD$ @s.CurrentBalance.ToString("N2")</td>
-                    <td class="text-end">
-                        <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => OpenEditModal(s)"><i class="bi bi-pencil"></i></button>
-                        @if (s.CurrentBalance > 0)
-                        {
-                            <button class="btn btn-sm btn-outline-success" @onclick="() => OpenPayModal(s)">Abonar</button>
-                        }
-                    </td>
+                    <th>Suplidor</th><th>RNC</th><th>Teléfono</th><th>Correo</th><th>Contacto</th><th>Balance CxP</th><th class="text-end">Acciones</th>
                 </tr>
-            }
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @foreach (var s in _suppliers)
+                {
+                    <tr>
+                        <td class="fw-semibold">@s.Name @if (!s.IsActive) { <span class="badge bg-secondary ms-1">Inactivo</span> }</td>
+                        <td>@s.Rnc</td>
+                        <td>@s.Phone</td>
+                        <td>@s.Email</td>
+                        <td>@s.ContactPerson</td>
+                        <td class="fw-bold @(s.CurrentBalance > 0 ? "text-danger" : "text-success")">RD$ @s.CurrentBalance.ToString("N2")</td>
+                        <td class="text-end">
+                            <div class="d-inline-flex gap-1">
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenEditModal(s)"><i class="bi bi-pencil"></i></button>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="() => OpenHistoryModalAsync(s)">Historial</button>
+                                @if (s.CurrentBalance > 0)
+                                {
+                                    <button class="btn btn-sm btn-outline-success" @onclick="() => OpenPayModal(s)">Abonar</button>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
 </div>
 
 @if (_showForm)
 {
     <div class="modal fade show d-block" style="background: rgba(0,0,0,0.45);">
         <div class="modal-dialog"><div class="modal-content">
-            <div class="modal-header"><h5 class="modal-title">Suplidor</h5><button class="btn-close" @onclick="() => _showForm = false"></button></div>
+            <div class="modal-header"><h5 class="modal-title">@(_editing.Id == 0 ? "Nuevo Suplidor" : "Editar Suplidor")</h5><button class="btn-close" @onclick="() => _showForm = false"></button></div>
             <div class="modal-body">
                 <div class="mb-2"><label class="form-label small">Nombre</label><input class="form-control" @bind="_editing.Name" /></div>
                 <div class="row g-2 mb-2">
                     <div class="col-6"><label class="form-label small">RNC</label><input class="form-control" @bind="_editing.Rnc" /></div>
                     <div class="col-6"><label class="form-label small">Teléfono</label><input class="form-control" @bind="_editing.Phone" /></div>
                 </div>
-                <div class="mb-2"><label class="form-label small">Contacto</label><input class="form-control" @bind="_editing.ContactPerson" /></div>
-                <div><label class="form-label small">Dirección</label><input class="form-control" @bind="_editing.Address" /></div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6"><label class="form-label small">Correo</label><input type="email" class="form-control" @bind="_editing.Email" /></div>
+                    <div class="col-6"><label class="form-label small">Contacto</label><input class="form-control" @bind="_editing.ContactPerson" /></div>
+                </div>
+                <div class="mb-2"><label class="form-label small">Dirección</label><input class="form-control" @bind="_editing.Address" /></div>
+                @if (_editing.Id != 0)
+                {
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="supActiveSwitch" @bind="_editing.IsActive" />
+                        <label class="form-check-label small" for="supActiveSwitch">Suplidor activo</label>
+                    </div>
+                }
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" @onclick="() => _showForm = false">Cancelar</button>
@@ -77,6 +93,38 @@
                 <input class="form-control" @bind="_payRef" />
             </div>
             <div class="modal-footer"><button class="btn btn-brand btn-sm" @onclick="ConfirmPayAsync">Registrar Pago</button></div>
+        </div></div>
+    </div>
+}
+
+@if (_showHistory && _historyTarget != null)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.45);">
+        <div class="modal-dialog"><div class="modal-content">
+            <div class="modal-header"><h6 class="modal-title">Historial de Pagos: @_historyTarget.Name</h6><button class="btn-close" @onclick="() => _showHistory = false"></button></div>
+            <div class="modal-body">
+                @if (_payments.Count == 0)
+                {
+                    <p class="text-muted small mb-0">No se han registrado abonos para este suplidor.</p>
+                }
+                else
+                {
+                    <table class="table table-sm small mb-0">
+                        <thead><tr><th>Fecha</th><th>Referencia</th><th>Método</th><th class="text-end">Monto</th></tr></thead>
+                        <tbody>
+                            @foreach (var p in _payments)
+                            {
+                                <tr>
+                                    <td>@p.PaymentDate.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                                    <td><code>@p.Reference</code></td>
+                                    <td>@p.PaymentMethod</td>
+                                    <td class="text-end fw-semibold">RD$ @p.Amount.ToString("N2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
         </div></div>
     </div>
 }

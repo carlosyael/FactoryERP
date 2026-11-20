@@ -40,6 +40,17 @@ public sealed class BusinessProfileService : IBusinessProfileService
 
     public async Task UpdateProfileAsync(BusinessProfileDto profile)
     {
+        if (string.IsNullOrWhiteSpace(profile.BusinessName))
+            throw new ArgumentException("El nombre del comercio es obligatorio.", nameof(profile));
+        if (profile.DefaultTaxRate < 0m || profile.DefaultTaxRate > 1m)
+            throw new ArgumentException("La tasa de ITBIS debe expresarse en decimal entre 0 y 1 (ej. 0.18).", nameof(profile));
+        if (profile.MaxDiscountPercentage < 0m || profile.MaxDiscountPercentage > 100m)
+            throw new ArgumentException("El descuento máximo debe estar entre 0% y 100%.", nameof(profile));
+        if (profile.DefaultLossMarginPercent < 0m || profile.DefaultLossMarginPercent >= 100m)
+            throw new ArgumentException("La merma estándar por defecto debe estar entre 0% y 99.99%.", nameof(profile));
+        if (profile.AbnormalLossTolerancePercent < 0m || profile.AbnormalLossTolerancePercent > 50m)
+            throw new ArgumentException("La tolerancia de merma anormal debe estar entre 0% y 50%.", nameof(profile));
+
         var updates = new Dictionary<string, string>
         {
             [SettingKeys.BusinessName] = profile.BusinessName.Trim(),

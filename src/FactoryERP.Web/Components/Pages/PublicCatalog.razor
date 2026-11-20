@@ -70,8 +70,8 @@ else
                         <h5 class="fw-bold mb-1">@p.Name</h5>
                         <p class="small text-muted flex-grow-1">@p.Description</p>
                         <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span class="fs-5 fw-bold text-brand">RD$ @p.RetailPrice.ToString("N2")</span>
-                            @if (p.SalonPrice > 0) { <small class="text-muted">Salón: RD$ @p.SalonPrice.ToString("N0")</small> }
+                            <span class="fs-5 fw-bold text-brand">@(_profile?.CurrencySymbol ?? "RD$") @p.RetailPrice.ToString("N2")</span>
+                            @if (p.SalonPrice > 0) { <small class="text-muted">Salón: @(_profile?.CurrencySymbol ?? "RD$") @p.SalonPrice.ToString("N0")</small> }
                         </div>
                         <div class="d-flex gap-2">
                             <button class="btn btn-sm btn-outline-secondary flex-fill" @onclick="() => _detailItem = p">Detalles</button>
@@ -111,7 +111,10 @@ else
                 @foreach (var entry in _cart.Values.ToList())
                 {
                     <div class="d-flex justify-content-between align-items-center py-2 border-bottom small">
-                        <div><strong>@entry.Item.Name</strong> <span class="text-muted">(@entry.Item.Presentation)</span></div>
+                        <div>
+                            <strong>@entry.Item.Name</strong> <span class="text-muted">(@entry.Item.Presentation)</span>
+                            <div class="text-muted">@(_profile?.CurrencySymbol ?? "RD$") @entry.Item.RetailPrice.ToString("N2") c/u</div>
+                        </div>
                         <div class="d-flex align-items-center gap-1">
                             <button class="btn btn-sm btn-outline-secondary" @onclick="() => ChangeQty(entry.Item.ProductId, -1)">-</button>
                             <span class="px-2 fw-bold">@entry.Qty</span>
@@ -119,6 +122,10 @@ else
                         </div>
                     </div>
                 }
+                <div class="d-flex justify-content-between align-items-center pt-2 fw-bold small">
+                    <span>Subtotal estimado (PVP)</span>
+                    <span class="text-brand">@(_profile?.CurrencySymbol ?? "RD$") @_cart.Values.Sum(c => c.Item.RetailPrice * c.Qty).ToString("N2")</span>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline-danger btn-sm" @onclick="() => { _cart.Clear(); _showCart = false; }">Vaciar</button>

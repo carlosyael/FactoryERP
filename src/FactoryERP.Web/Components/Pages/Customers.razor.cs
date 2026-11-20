@@ -20,6 +20,10 @@ public partial class Customers
     private PaymentMethod _payMethod = PaymentMethod.Cash;
     private string _payRef = "";
 
+    private bool _showHistory;
+    private Customer? _historyTarget;
+    private List<CustomerPayment> _payments = new();
+
     protected override async Task OnInitializedAsync() => _customers = await CustomerService.GetAllAsync(true);
 
     private void OpenNewModal() { _editing = new Customer(); _showForm = true; }
@@ -40,6 +44,13 @@ public partial class Customers
         _payAmount = c.CurrentBalance;
         _payRef = $"COB-{DateTime.Now:yyyyMMdd}";
         _showPay = true;
+    }
+
+    private async Task OpenHistoryModalAsync(Customer c)
+    {
+        _historyTarget = c;
+        _payments = await CustomerService.GetPaymentsAsync(c.Id);
+        _showHistory = true;
     }
 
     private async Task SaveAsync()

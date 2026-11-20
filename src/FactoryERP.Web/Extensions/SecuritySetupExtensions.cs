@@ -60,6 +60,9 @@ public static class SecuritySetupExtensions
         ConfigureJwt(services, configuration, environment);
         ConfigureRateLimiting(services);
 
+        services.Configure<SecurityStampValidatorOptions>(options =>
+            options.ValidationInterval = TimeSpan.FromMinutes(1));
+
         services.AddAuthorization(options =>
         {
             foreach (string permission in Permissions.GetAll())

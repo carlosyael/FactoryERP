@@ -4,33 +4,35 @@
 <div class="d-flex justify-content-between align-items-center mb-3 no-print">
     <div>
         <h3 class="fw-bold mb-0">Pedidos y Ventas</h3>
-        <small class="text-muted">Facturación comercial con precios por segmento, FEFO e ITBIS 18%</small>
+        <small class="text-muted">Facturación comercial con precios por segmento, FEFO e ITBIS @(((_profile?.DefaultTaxRate ?? 0.18m) * 100m).ToString("N0"))%</small>
     </div>
     <button class="btn btn-brand btn-sm" @onclick="OpenNewModal"><i class="bi bi-plus-lg me-1"></i> Nueva Venta</button>
 </div>
 
 <div class="card p-3 no-print">
-    <table class="table table-hover align-middle mb-0">
-        <thead class="table-light">
-            <tr><th>Comprobante</th><th>Fecha</th><th>Cliente</th><th>Pago</th><th>SubTotal</th><th>ITBIS</th><th>Total</th><th>e-CF</th><th class="text-end">Ver</th></tr>
-        </thead>
-        <tbody>
-            @foreach (var s in _sales)
-            {
-                <tr>
-                    <td><code>@s.SaleNumber</code></td>
-                    <td>@s.SaleDate.ToLocalTime().ToString("dd/MM/yyyy")</td>
-                    <td>@s.Customer?.Name</td>
-                    <td>@s.PaymentMethod</td>
-                    <td>RD$ @s.SubTotal.ToString("N2")</td>
-                    <td>RD$ @s.TaxAmount.ToString("N2")</td>
-                    <td class="fw-bold">RD$ @s.Total.ToString("N2")</td>
-                    <td><span class="badge bg-secondary">Pend. impl.</span></td>
-                    <td class="text-end"><button class="btn btn-sm btn-outline-primary" @onclick="() => _selectedSale = s">Recibo</button></td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr><th>Comprobante</th><th>Fecha</th><th>Cliente</th><th>Pago</th><th>SubTotal</th><th>ITBIS</th><th>Total</th><th>e-CF</th><th class="text-end">Ver</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var s in _sales)
+                {
+                    <tr>
+                        <td><code>@s.SaleNumber</code></td>
+                        <td>@s.SaleDate.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                        <td>@s.Customer?.Name</td>
+                        <td>@s.PaymentMethod</td>
+                        <td>RD$ @s.SubTotal.ToString("N2")</td>
+                        <td>RD$ @s.TaxAmount.ToString("N2")</td>
+                        <td class="fw-bold">RD$ @s.Total.ToString("N2")</td>
+                        <td><span class="badge bg-secondary">Pend. impl.</span></td>
+                        <td class="text-end"><button class="btn btn-sm btn-outline-primary" @onclick="() => _selectedSale = s">Recibo</button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
 </div>
 
 @if (_showNewModal)
@@ -79,7 +81,7 @@
                 <div class="alert alert-light border small mt-3 mb-0 d-flex justify-content-between">
                     <span>SubTotal: <strong>RD$ @preview.SubTotal.ToString("N2")</strong></span>
                     <span>Descuento: <strong>RD$ @preview.Discount.ToString("N2")</strong></span>
-                    <span>ITBIS (18%): <strong>RD$ @preview.Tax.ToString("N2")</strong></span>
+                    <span>ITBIS (@(((_profile?.DefaultTaxRate ?? 0.18m) * 100m).ToString("N0"))%): <strong>RD$ @preview.Tax.ToString("N2")</strong></span>
                     <span class="text-brand">Total Est.: <strong>RD$ @preview.Total.ToString("N2")</strong></span>
                 </div>
             </div>
@@ -106,17 +108,29 @@
                 <div><strong>Cliente:</strong> @_selectedSale.Customer?.Name</div>
                 <div class="mb-2"><strong>Fecha:</strong> @_selectedSale.SaleDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
                 <table class="table table-sm">
-                    <thead><tr><th>Producto</th><th>Cant</th><th class="text-end">Total</th></tr></thead>
+                    <thead><tr><th>Producto / Lote</th><th>Cant</th><th class="text-end">P. Unit</th><th class="text-end">Total</th></tr></thead>
                     <tbody>
                         @foreach (var item in _selectedSale.Items)
                         {
-                            <tr><td>@item.Product?.Name</td><td>@item.Quantity</td><td class="text-end">RD$ @item.LineTotal.ToString("N2")</td></tr>
+                            <tr>
+                                <td>
+                                    @item.Product?.Name
+                                    @if (item.FinishedBatch != null) { <div class="text-muted">Lote: @item.FinishedBatch.BatchCode</div> }
+                                </td>
+                                <td>@item.Quantity</td>
+                                <td class="text-end">RD$ @item.UnitPrice.ToString("N2")</td>
+                                <td class="text-end">RD$ @item.LineTotal.ToString("N2")</td>
+                            </tr>
                         }
                     </tbody>
                 </table>
                 <div class="text-end">
                     <div>SubTotal: RD$ @_selectedSale.SubTotal.ToString("N2")</div>
-                    <div>ITBIS (18%): RD$ @_selectedSale.TaxAmount.ToString("N2")</div>
+                    @if (_selectedSale.DiscountAmount > 0m)
+                    {
+                        <div class="text-danger">Descuento: -RD$ @_selectedSale.DiscountAmount.ToString("N2")</div>
+                    }
+                    <div>ITBIS (@(((_profile?.DefaultTaxRate ?? 0.18m) * 100m).ToString("N0"))%): RD$ @_selectedSale.TaxAmount.ToString("N2")</div>
                     <div class="fs-6 fw-bold">Total: RD$ @_selectedSale.Total.ToString("N2")</div>
                 </div>
             </div>

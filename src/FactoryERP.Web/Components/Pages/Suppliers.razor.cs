@@ -20,12 +20,16 @@ public partial class Suppliers
     private PaymentMethod _payMethod = PaymentMethod.BankTransfer;
     private string _payRef = "";
 
+    private bool _showHistory;
+    private Supplier? _historyTarget;
+    private List<SupplierPayment> _payments = new();
+
     protected override async Task OnInitializedAsync() => _suppliers = await SupplierService.GetAllAsync(true);
 
     private void OpenNewModal() { _editing = new Supplier(); _showForm = true; }
     private void OpenEditModal(Supplier s)
     {
-        _editing = new Supplier { Id = s.Id, Name = s.Name, Rnc = s.Rnc, Phone = s.Phone, ContactPerson = s.ContactPerson, Address = s.Address, IsActive = s.IsActive };
+        _editing = new Supplier { Id = s.Id, Name = s.Name, Rnc = s.Rnc, Phone = s.Phone, Email = s.Email, ContactPerson = s.ContactPerson, Address = s.Address, IsActive = s.IsActive };
         _showForm = true;
     }
 
@@ -35,6 +39,13 @@ public partial class Suppliers
         _payAmount = s.CurrentBalance;
         _payRef = $"PAG-{DateTime.Now:yyyyMMdd}";
         _showPay = true;
+    }
+
+    private async Task OpenHistoryModalAsync(Supplier s)
+    {
+        _historyTarget = s;
+        _payments = await SupplierService.GetPaymentsAsync(s.Id);
+        _showHistory = true;
     }
 
     private async Task SaveAsync()

@@ -1,6 +1,7 @@
 using System.Text;
 using FactoryERP.Core.Entities;
 using FactoryERP.Core.Interfaces;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -58,7 +59,7 @@ public sealed class AuditInterceptor : SaveChangesInterceptor
                 }
             }
 
-            if (entry.Entity is AuditLog) continue;
+            if (entry.Entity is AuditLog or DataProtectionKey) continue;
 
             string pk = entry.Properties.FirstOrDefault(p => p.Metadata.IsPrimaryKey())?.CurrentValue?.ToString() ?? "N/A";
             context.Set<AuditLog>().Add(new AuditLog

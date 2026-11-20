@@ -12,11 +12,13 @@ public partial class Formulas
     [Inject] private IFormulaService FormulaService { get; set; } = default!;
     [Inject] private IProductService ProductService { get; set; } = default!;
     [Inject] private IRawMaterialService RawMaterialService { get; set; } = default!;
+    [Inject] private IBusinessProfileService BusinessProfileService { get; set; } = default!;
     [Inject] private SweetAlertService Swal { get; set; } = default!;
 
     private List<ProductFormula> _formulas = new();
     private List<Product> _products = new();
     private List<RawMaterial> _materials = new();
+    private decimal _defaultLossMargin = 5m;
     private readonly Dictionary<int, (decimal MaterialCost, decimal UnitCost)> _formulaSummary = new();
     private ProductFormula _editing = new();
     private List<EditableFormulaItem> _items = new();
@@ -24,6 +26,8 @@ public partial class Formulas
 
     protected override async Task OnInitializedAsync()
     {
+        var profile = await BusinessProfileService.GetProfileAsync();
+        _defaultLossMargin = profile.DefaultLossMarginPercent;
         _products = await ProductService.GetAllAsync();
         _materials = await RawMaterialService.GetAllAsync();
         await LoadFormulasAsync();
@@ -51,7 +55,7 @@ public partial class Formulas
             ProductId = _products.FirstOrDefault()?.Id ?? 0,
             Version = "1.0",
             BaseYieldQuantity = 10,
-            StandardLossMarginPercent = 5m
+            StandardLossMarginPercent = _defaultLossMargin
         };
         _items = _materials.Count > 0 ? [new() { RawMaterialId = _materials[0].Id, QuantityRequired = 100m, UnitOfMeasure = _materials[0].UnitOfMeasure }] : [];
         _showModal = true;
