@@ -1,5 +1,6 @@
 using FactoryERP.Core.Domain;
 using FactoryERP.Core.Entities;
+using FactoryERP.Core.Enums;
 using FactoryERP.Core.Interfaces;
 using FactoryERP.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -52,7 +53,7 @@ public sealed class FormulaService : IFormulaService
     public async Task<ProductFormula> CreateAsync(ProductFormula formula)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        await ValidateFormulaAsync(context, formula);
+        await FormulaValidationHelper.ValidateFormulaAsync(context, formula);
 
         formula.Name = formula.Name.Trim();
         formula.Version = formula.Version.Trim();
@@ -69,7 +70,21 @@ public sealed class FormulaService : IFormulaService
             .FirstOrDefaultAsync(f => f.Id == formula.Id)
             ?? throw new InvalidOperationException("Fórmula no encontrada.");
 
-        await ValidateFormulaAsync(context, formula);
+        bool hasOrders = await context.ProductionOrders.AnyAsync(
+            o => o.ProductFormulaId == formula.Id && o.Status != ProductionOrderStatus.Cancelled);
+        if (hasOrders)
+        {
+            if (FormulaValidationHelper.HasStructuralChanges(existing, formula))
+                throw new InvalidOperationException(
+                    "Esta fórmula ya tiene órdenes de producción vinculadas. Solo puedes editar instrucciones o estado activo; usa 'Nueva versión' para cambiar receta, rendimiento o costos.");
+
+            existing.Instructions = (formula.Instructions ?? string.Empty).Trim();
+            existing.IsActive = formula.IsActive;
+            await context.SaveChangesAsync();
+            return;
+        }
+
+        await FormulaValidationHelper.ValidateFormulaAsync(context, formula);
 
         existing.ProductId = formula.ProductId;
         existing.Name = formula.Name.Trim();
@@ -77,7 +92,7 @@ public sealed class FormulaService : IFormulaService
         existing.BaseYieldQuantity = formula.BaseYieldQuantity;
         existing.StandardLossMarginPercent = formula.StandardLossMarginPercent;
         existing.OverheadCostPerBatch = formula.OverheadCostPerBatch;
-        existing.Instructions = formula.Instructions.Trim();
+        existing.Instructions = (formula.Instructions ?? string.Empty).Trim();
         existing.IsActive = formula.IsActive;
 
         context.FormulaItems.RemoveRange(existing.Items);
@@ -89,6 +104,49 @@ public sealed class FormulaService : IFormulaService
         }).ToList();
 
         await context.SaveChangesAsync();
+    }
+
+    public async Task<ProductFormula> CloneAsNewVersionAsync(int formulaId, string? newVersion = null)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var source = await context.ProductFormulas.AsNoTracking()
+            .Include(f => f.Items)
+            .FirstOrDefaultAsync(f => f.Id == formulaId)
+            ?? throw new InvalidOperationException("Fórmula no encontrada.");
+
+        var versionSet = (await context.ProductFormulas
+            .Where(f => f.ProductId == source.ProductId)
+            .Select(f => f.Version)
+            .ToListAsync()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        string targetVersion = string.IsNullOrWhiteSpace(newVersion)
+            ? FormulaValidationHelper.ComputeNextVersion(source.Version, versionSet)
+            : newVersion.Trim();
+
+        if (versionSet.Contains(targetVersion))
+            throw new InvalidOperationException($"Ya existe la versión '{targetVersion}' para este producto.");
+
+        var clone = new ProductFormula
+        {
+            ProductId = source.ProductId,
+            Name = source.Name,
+            Version = targetVersion,
+            BaseYieldQuantity = source.BaseYieldQuantity,
+            StandardLossMarginPercent = source.StandardLossMarginPercent,
+            OverheadCostPerBatch = source.OverheadCostPerBatch,
+            Instructions = source.Instructions,
+            IsActive = true,
+            Items = source.Items.Select(i => new FormulaItem
+            {
+                RawMaterialId = i.RawMaterialId,
+                QuantityRequired = i.QuantityRequired,
+                UnitOfMeasure = i.UnitOfMeasure
+            }).ToList()
+        };
+
+        context.ProductFormulas.Add(clone);
+        await context.SaveChangesAsync();
+        return (await GetByIdAsync(clone.Id))!;
     }
 
     public async Task<decimal> CalculateBaseMaterialCostAsync(int formulaId)
@@ -105,37 +163,5 @@ public sealed class FormulaService : IFormulaService
         }
 
         return Math.Round(total, 2, MidpointRounding.AwayFromZero);
-    }
-
-    private static async Task ValidateFormulaAsync(AppDbContext context, ProductFormula formula)
-    {
-        if (string.IsNullOrWhiteSpace(formula.Name))
-            throw new ArgumentException("El nombre de la fórmula es obligatorio.");
-        if (formula.BaseYieldQuantity <= 0)
-            throw new ArgumentException("El rendimiento base debe ser mayor a cero.");
-        if (formula.StandardLossMarginPercent < 0m || formula.StandardLossMarginPercent >= 100m)
-            throw new ArgumentException("El margen de pérdida debe estar entre 0% y 99.99%.");
-        if (formula.OverheadCostPerBatch < 0m)
-            throw new ArgumentException("El costo indirecto por lote no puede ser negativo.");
-        if (formula.Items == null || formula.Items.Count == 0)
-            throw new InvalidOperationException("La fórmula debe contener al menos una materia prima.");
-        if (!await context.Products.AnyAsync(p => p.Id == formula.ProductId))
-            throw new InvalidOperationException("Producto terminado no encontrado.");
-        if (formula.Items.GroupBy(i => i.RawMaterialId).Any(g => g.Count() > 1))
-            throw new InvalidOperationException("La fórmula no debe repetir la misma materia prima.");
-
-        var ids = formula.Items.Select(i => i.RawMaterialId).Distinct().ToList();
-        var materials = await context.RawMaterials.Where(m => ids.Contains(m.Id)).ToDictionaryAsync(m => m.Id);
-
-        foreach (var item in formula.Items)
-        {
-            if (item.QuantityRequired <= 0m)
-                throw new ArgumentException("La cantidad requerida de cada material debe ser mayor a cero.");
-            if (!materials.TryGetValue(item.RawMaterialId, out var mat))
-                throw new InvalidOperationException($"Materia prima ID {item.RawMaterialId} no encontrada.");
-            if (!UnitConverter.AreCompatible(item.UnitOfMeasure, mat.UnitOfMeasure))
-                throw new InvalidOperationException(
-                    $"La unidad {item.UnitOfMeasure} es incompatible con '{mat.Name}' ({mat.UnitOfMeasure}).");
-        }
     }
 }

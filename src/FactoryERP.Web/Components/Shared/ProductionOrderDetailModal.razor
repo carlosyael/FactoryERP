@@ -1,0 +1,105 @@
+@inject IJSRuntime JSRuntime
+
+@if (Order != null)
+{
+    <div class="modal fade show d-block print-modal" style="background: rgba(0,0,0,0.45);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header no-print">
+                    <h5 class="modal-title">
+                        Hoja de Producción <span class="text-brand">@Order.OrderNumber</span>
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="OnClose"></button>
+                </div>
+                <div class="modal-body small">
+                    <div class="border-bottom pb-2 mb-3 d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="fw-bold mb-1">Orden @Order.OrderNumber — Lote <code>@Order.BatchCode</code></h6>
+                            <div><strong>Producto:</strong> @Order.Product?.Name @(!string.IsNullOrWhiteSpace(Order.Product?.Presentation) ? $"({Order.Product!.Presentation})" : "")</div>
+                            <div><strong>Fórmula:</strong> @Order.ProductFormula?.Name (v@(Order.ProductFormula?.Version))</div>
+                        </div>
+                        <span class="badge bg-secondary">@Order.Status</span>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6 col-md-3"><strong>Planificada:</strong> @Order.PlannedDate.ToLocalTime().ToString("dd/MM/yyyy")</div>
+                        <div class="col-6 col-md-3"><strong>Inicio:</strong> @(Order.StartedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
+                        <div class="col-6 col-md-3"><strong>Cierre:</strong> @(Order.CompletedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
+                        <div class="col-6 col-md-3"><strong>Vencimiento:</strong> @(Order.ExpirationDate?.ToLocalTime().ToString("dd/MM/yyyy") ?? "-")</div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(Order.Notes))
+                    {
+                        <div class="alert alert-light border py-2 mb-3">
+                            <strong>Notas:</strong> @Order.Notes
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(Order.ProductFormula?.Instructions))
+                    {
+                        <div class="alert alert-info py-2 mb-3">
+                            <strong>Instrucciones de Preparación:</strong>
+                            <div style="white-space: pre-line;">@Order.ProductFormula!.Instructions</div>
+                        </div>
+                    }
+
+                    <h6 class="fw-bold mb-2">Materiales e Insumos</h6>
+                    <div class="table-responsive mb-3">
+                        <table class="table table-sm table-bordered mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Material</th>
+                                    <th class="text-end">Planificado</th>
+                                    <th class="text-end">Real</th>
+                                    <th class="text-end">Costo Unit.</th>
+                                    <th class="text-end">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var m in Order.Materials)
+                                {
+                                    string unit = m.RawMaterial != null ? UnitConverter.GetShortLabel(m.RawMaterial.UnitOfMeasure) : "";
+                                    <tr>
+                                        <td>@m.RawMaterial?.Name <small class="text-muted">(@m.RawMaterial?.Sku)</small></td>
+                                        <td class="text-end">@m.PlannedQuantity.ToString("N2") @unit</td>
+                                        <td class="text-end fw-semibold">@m.ActualQuantityUsed.ToString("N2") @unit</td>
+                                        <td class="text-end">@CurrencySymbol @m.UnitCostAtConsumption.ToString("N4")</td>
+                                        <td class="text-end">@CurrencySymbol @m.TotalCost.ToString("N2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="row g-2 border-top pt-2">
+                        <div class="col-md-6">
+                            <div><strong>Planificado / Esperado:</strong> @Order.PlannedQuantity / @Order.ExpectedResultingQuantity uds (@Order.ExpectedLossMarginPercent.ToString("N2")%)</div>
+                            <div><strong>Resultante Real:</strong> @(Order.ActualYieldQuantity?.ToString() ?? "-") uds</div>
+                            <div><strong>Merma Real:</strong> @(Order.ActualLossPercent.HasValue ? $"{Order.ActualLossPercent:N2}% ({Order.ActualLossQuantity} uds)" : "-")</div>
+                        </div>
+                        <div class="col-md-6 text-md-end">
+                            <div><strong>MP Est. / Real:</strong> @CurrencySymbol @Order.EstimatedMaterialCost.ToString("N2") / @CurrencySymbol @Order.ActualMaterialCost.ToString("N2")</div>
+                            <div><strong>CIF Est. / Real:</strong> @CurrencySymbol @Order.EstimatedOverheadCost.ToString("N2") / @CurrencySymbol @Order.ActualOverheadCost.ToString("N2")</div>
+                            <div><strong>Merma Anormal (Pérdida):</strong> @CurrencySymbol @Order.AbnormalLossCost.ToString("N2")</div>
+                            <div class="fw-bold text-brand"><strong>Capitalizado / Unitario:</strong> @CurrencySymbol @Order.CapitalizedInventoryCost.ToString("N2") (@CurrencySymbol @Order.ActualUnitCost.ToString("N4")/ud)</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer no-print">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="PrintAsync">
+                        <i class="bi bi-printer me-1"></i> Imprimir Hoja
+                    </button>
+                    <button type="button" class="btn btn-brand btn-sm" @onclick="OnClose">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public ProductionOrder? Order { get; set; }
+    [Parameter] public string CurrencySymbol { get; set; } = "RD$";
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private async Task PrintAsync() => await JSRuntime.InvokeVoidAsync("printPage");
+}

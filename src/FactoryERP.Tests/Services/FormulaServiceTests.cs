@@ -1,8 +1,10 @@
 using FactoryERP.Core.Entities;
 using FactoryERP.Core.Enums;
+using FactoryERP.Core.Models;
 using FactoryERP.Infrastructure.Services;
 using FactoryERP.Tests.Factories;
 using FluentAssertions;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace FactoryERP.Tests.Services;
 
@@ -123,5 +125,73 @@ public class FormulaServiceTests
         updated!.Version.Should().Be("1.1");
         updated.Items.Should().HaveCount(2);
         (await formulaService.CalculateBaseMaterialCostAsync(created.Id)).Should().Be(550m);
+    }
+
+    [Fact]
+    public async Task CloneAsNewVersion_AndUpdateLockWhenUsedByOrders_WorkProperly()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        var productService = new ProductService(factory);
+        var materialService = new RawMaterialService(factory);
+        var formulaService = new FormulaService(factory);
+        var settings = new SystemSettingService(factory, new MemoryCache(new MemoryCacheOptions()));
+        var orderService = new ProductionOrderService(factory, settings, new ManufacturingAccountingService(factory));
+
+        var product = await productService.CreateAsync(new Product { Sku = "FV-01", Name = "Serum", RetailPrice = 800m });
+        var mat = await materialService.CreateAsync(new RawMaterial { Sku = "FM-01", Name = "Aceite Base", UnitOfMeasure = UnitOfMeasure.Milliliter, CurrentStock = 5000m, AverageCost = 2m });
+
+        var v1 = await formulaService.CreateAsync(new ProductFormula
+        {
+            ProductId = product.Id,
+            Name = "Serum Capilar",
+            Version = "1.0",
+            BaseYieldQuantity = 10,
+            StandardLossMarginPercent = 5m,
+            OverheadCostPerBatch = 100m,
+            Items = [new() { RawMaterialId = mat.Id, QuantityRequired = 500m, UnitOfMeasure = UnitOfMeasure.Milliliter }]
+        });
+
+        await orderService.CreateDraftAsync(new CreateProductionOrderRequest(v1.Id, 10, null, null, null, "LOT-FRM-1"));
+
+        var blockedEdit = new ProductFormula
+        {
+            Id = v1.Id,
+            ProductId = v1.ProductId,
+            Name = v1.Name,
+            Version = v1.Version,
+            BaseYieldQuantity = 12,
+            StandardLossMarginPercent = v1.StandardLossMarginPercent,
+            OverheadCostPerBatch = v1.OverheadCostPerBatch,
+            Items = [new() { RawMaterialId = mat.Id, QuantityRequired = 500m, UnitOfMeasure = UnitOfMeasure.Milliliter }]
+        };
+        Func<Task> structuralAct = () => formulaService.UpdateAsync(blockedEdit);
+        await structuralAct.Should().ThrowAsync<InvalidOperationException>();
+
+        var metadataEdit = new ProductFormula
+        {
+            Id = v1.Id,
+            ProductId = v1.ProductId,
+            Name = v1.Name,
+            Version = v1.Version,
+            BaseYieldQuantity = v1.BaseYieldQuantity,
+            StandardLossMarginPercent = v1.StandardLossMarginPercent,
+            OverheadCostPerBatch = v1.OverheadCostPerBatch,
+            Instructions = "Mezclar a temperatura ambiente.",
+            IsActive = false,
+            Items = [new() { RawMaterialId = mat.Id, QuantityRequired = 500m, UnitOfMeasure = UnitOfMeasure.Milliliter }]
+        };
+        await formulaService.UpdateAsync(metadataEdit);
+
+        var refreshed = await formulaService.GetByIdAsync(v1.Id);
+        refreshed!.Instructions.Should().Be("Mezclar a temperatura ambiente.");
+        refreshed.IsActive.Should().BeFalse();
+
+        var v11 = await formulaService.CloneAsNewVersionAsync(v1.Id);
+        v11.Version.Should().Be("1.1");
+        v11.IsActive.Should().BeTrue();
+        v11.Items.Should().ContainSingle(i => i.RawMaterialId == mat.Id && i.QuantityRequired == 500m);
+
+        var v12 = await formulaService.CloneAsNewVersionAsync(v1.Id);
+        v12.Version.Should().Be("1.2");
     }
 }

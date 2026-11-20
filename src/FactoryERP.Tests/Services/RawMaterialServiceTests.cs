@@ -79,4 +79,36 @@ public class RawMaterialServiceTests
         Func<Task> emptyUpdate = () => service.UpdateAsync(m2);
         await emptyUpdate.Should().ThrowAsync<ArgumentException>();
     }
+
+    [Fact]
+    public async Task UpdateAsync_IncompatibleUnitWhenUsedInFormula_ThrowsInvalidOperationException()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        var productService = new ProductService(factory);
+        var materialService = new RawMaterialService(factory);
+        var formulaService = new FormulaService(factory);
+
+        var prod = await productService.CreateAsync(new Product { Sku = "RM-P1", Name = "Shampoo", RetailPrice = 500m });
+        var mat = await materialService.CreateAsync(new RawMaterial
+        {
+            Sku = "RM-BASE-G", Name = "Base Masa", UnitOfMeasure = UnitOfMeasure.Gram, AverageCost = 1m
+        });
+
+        await formulaService.CreateAsync(new ProductFormula
+        {
+            ProductId = prod.Id,
+            Name = "Receta Base",
+            Version = "1.0",
+            BaseYieldQuantity = 5,
+            Items = [new() { RawMaterialId = mat.Id, QuantityRequired = 500m, UnitOfMeasure = UnitOfMeasure.Gram }]
+        });
+
+        mat.UnitOfMeasure = UnitOfMeasure.Kilogram;
+        await materialService.UpdateAsync(mat);
+        (await materialService.GetByIdAsync(mat.Id))!.UnitOfMeasure.Should().Be(UnitOfMeasure.Kilogram);
+
+        mat.UnitOfMeasure = UnitOfMeasure.Milliliter;
+        Func<Task> incompatibleAct = () => materialService.UpdateAsync(mat);
+        await incompatibleAct.Should().ThrowAsync<InvalidOperationException>();
+    }
 }

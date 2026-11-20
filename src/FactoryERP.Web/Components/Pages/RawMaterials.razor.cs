@@ -1,5 +1,6 @@
 using CurrieTechnologies.Razor.SweetAlert2;
 using FactoryERP.Core.Entities;
+using FactoryERP.Core.Enums;
 using FactoryERP.Core.Interfaces;
 using Microsoft.AspNetCore.Components;
 
@@ -8,9 +9,15 @@ namespace FactoryERP.Web.Components.Pages;
 public partial class RawMaterials
 {
     [Inject] private IRawMaterialService RawMaterialService { get; set; } = default!;
+    [Inject] private IBusinessProfileService BusinessProfileService { get; set; } = default!;
     [Inject] private SweetAlertService Swal { get; set; } = default!;
 
     private List<RawMaterial> _items = new();
+    private string _currencySymbol = "RD$";
+    private string _search = string.Empty;
+    private string _categoryFilter = string.Empty;
+    private bool _onlyLowStock;
+    private bool _showInactive;
     private RawMaterial _editing = new();
     private bool _showForm;
     private bool _showAdjust;
@@ -18,7 +25,20 @@ public partial class RawMaterials
     private decimal _newStockValue;
     private string _adjustReason = "Conteo físico";
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    private IEnumerable<RawMaterial> FilteredItems => _items.Where(item =>
+        (_showInactive || item.IsActive) &&
+        (!_onlyLowStock || item.IsLowStock) &&
+        (string.IsNullOrWhiteSpace(_categoryFilter) || (Enum.TryParse<RawMaterialCategory>(_categoryFilter, out var cat) && item.Category == cat)) &&
+        (string.IsNullOrWhiteSpace(_search) ||
+         item.Sku.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ||
+         item.Name.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var profile = await BusinessProfileService.GetProfileAsync();
+        _currencySymbol = string.IsNullOrWhiteSpace(profile.CurrencySymbol) ? "RD$" : profile.CurrencySymbol;
+        await LoadAsync();
+    }
 
     private async Task LoadAsync() => _items = await RawMaterialService.GetAllAsync(includeInactive: true);
 
@@ -58,10 +78,7 @@ public partial class RawMaterials
             await LoadAsync();
             await Swal.FireAsync("Guardado", "Materia prima registrada correctamente.", SweetAlertIcon.Success);
         }
-        catch (Exception ex)
-        {
-            await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
-        }
+        catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
     }
 
     private async Task ConfirmAdjustAsync()
@@ -74,9 +91,6 @@ public partial class RawMaterials
             await LoadAsync();
             await Swal.FireAsync("Stock actualizado", "Inventario ajustado.", SweetAlertIcon.Success);
         }
-        catch (Exception ex)
-        {
-            await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error);
-        }
+        catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
     }
 }

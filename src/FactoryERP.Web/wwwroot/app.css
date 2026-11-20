@@ -192,4 +192,18 @@ html, body {
         background: #ffffff !important;
         color: #000000 !important;
     }
+    .print-modal {
+        position: static !important;
+        display: block !important;
+        background: transparent !important;
+        overflow: visible !important;
+    }
+    .print-modal .modal-dialog {
+        max-width: 100% !important;
+        margin: 0 !important;
+    }
+    .print-modal .modal-content {
+        border: none !important;
+        box-shadow: none !important;
+    }
 }

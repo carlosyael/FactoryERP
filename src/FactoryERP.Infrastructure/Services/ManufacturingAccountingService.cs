@@ -24,7 +24,8 @@ public sealed class ManufacturingAccountingService : IManufacturingAccountingSer
         if (purchaseOrder.TaxAmount > 0m)
             lines.Add((AccountCodes.TaxCreditAdvance, purchaseOrder.TaxAmount, 0m, $"ITBIS compra {purchaseOrder.OrderNumber}"));
 
-        lines.Add((ResolveCreditSettlementCode(purchaseOrder.PaymentMethod), 0m, purchaseOrder.Total, $"Pago/CxP {purchaseOrder.OrderNumber}"));
+        string settlement = purchaseOrder.PaymentMethod switch { PaymentMethod.Cash => AccountCodes.Cash, PaymentMethod.Credit => AccountCodes.AccountsPayable, _ => AccountCodes.Bank };
+        lines.Add((settlement, 0m, purchaseOrder.Total, $"Pago/CxP {purchaseOrder.OrderNumber}"));
         return CreatePostedEntryAsync(purchaseOrder.PurchaseDate, $"Recepción de compra {purchaseOrder.OrderNumber}", purchaseOrder.OrderNumber, userId, lines);
     }
 
@@ -50,9 +51,11 @@ public sealed class ManufacturingAccountingService : IManufacturingAccountingSer
         return CreatePostedEntryAsync(order.StartedAt ?? DateTime.UtcNow, $"Inicio fabricación {order.OrderNumber}", order.OrderNumber, userId, lines);
     }
 
-    public Task<JournalEntry> PostProductionCompletionAsync(ProductionOrder order, string? userId = null)
+    public Task<JournalEntry> PostProductionCompletionAsync(
+        ProductionOrder order, string? userId = null, decimal? wipMaterialCleared = null)
     {
-        decimal wipClear = Math.Round(order.ActualMaterialCost, 2, MidpointRounding.AwayFromZero);
+        decimal wipClear = Math.Round(wipMaterialCleared ?? order.ActualMaterialCost, 2, MidpointRounding.AwayFromZero);
+        decimal matVariance = Math.Round(order.ActualMaterialCost - wipClear, 2, MidpointRounding.AwayFromZero);
         decimal overheadApplied = Math.Round(order.ActualOverheadCost, 2, MidpointRounding.AwayFromZero);
         var lines = new List<(string, decimal, decimal, string)>();
 
@@ -60,8 +63,12 @@ public sealed class ManufacturingAccountingService : IManufacturingAccountingSer
             lines.Add((AccountCodes.FinishedGoodsInventory, order.CapitalizedInventoryCost, 0m, $"Ingreso producto terminado lote {order.BatchCode}"));
         if (order.AbnormalLossCost > 0m)
             lines.Add((AccountCodes.AbnormalProductionLoss, order.AbnormalLossCost, 0m, $"Merma anormal orden {order.OrderNumber}"));
+        if (matVariance < 0m)
+            lines.Add((AccountCodes.RawMaterialInventory, -matVariance, 0m, $"Devolución sobrante materiales orden {order.OrderNumber}"));
         if (wipClear > 0m)
             lines.Add((AccountCodes.WorkInProgressInventory, 0m, wipClear, $"Liquidación WIP materiales orden {order.OrderNumber}"));
+        if (matVariance > 0m)
+            lines.Add((AccountCodes.RawMaterialInventory, 0m, matVariance, $"Consumo adicional materiales orden {order.OrderNumber}"));
         if (overheadApplied > 0m)
             lines.Add((AccountCodes.ManufacturingOverheadApplied, 0m, overheadApplied, $"CIF real aplicado orden {order.OrderNumber}"));
 
@@ -136,13 +143,6 @@ public sealed class ManufacturingAccountingService : IManufacturingAccountingSer
 
         return CreatePostedEntryAsync(DateTime.UtcNow, $"Ajuste inventario MP {material.Sku}", material.Sku, userId, lines);
     }
-
-    private static string ResolveCreditSettlementCode(PaymentMethod method) => method switch
-    {
-        PaymentMethod.Cash => AccountCodes.Cash,
-        PaymentMethod.Credit => AccountCodes.AccountsPayable,
-        _ => AccountCodes.Bank
-    };
 
     private async Task<JournalEntry> CreatePostedEntryAsync(
         DateTime date, string concept, string reference, string? userId,

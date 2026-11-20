@@ -65,29 +65,7 @@ public sealed class ProductionOrderService : IProductionOrderService
             ? $"LOT-{DateTime.UtcNow:yyyyMMdd}-{token}"
             : request.BatchCode.Trim().ToUpperInvariant();
 
-        var order = new ProductionOrder
-        {
-            OrderNumber = $"OP-{DateTime.UtcNow:yyyyMMdd}-{token}",
-            ProductId = sim.ProductId,
-            ProductFormulaId = sim.FormulaId,
-            BatchCode = batch,
-            PlannedDate = request.PlannedDate ?? DateTime.UtcNow,
-            ExpirationDate = request.ExpirationDate ?? DateTime.UtcNow.AddMonths(18),
-            PlannedQuantity = sim.PlannedQuantity,
-            ExpectedLossMarginPercent = sim.ExpectedLossMarginPercent,
-            ExpectedResultingQuantity = sim.ExpectedResultingQuantity,
-            EstimatedMaterialCost = sim.EstimatedMaterialCost,
-            EstimatedOverheadCost = sim.EstimatedOverheadCost,
-            Notes = request.Notes.Trim(),
-            Materials = sim.Materials.Select(m => new ProductionOrderMaterial
-            {
-                RawMaterialId = m.RawMaterialId,
-                PlannedQuantity = m.RequiredQuantity,
-                ActualQuantityUsed = m.RequiredQuantity,
-                UnitCostAtConsumption = m.UnitCost,
-                TotalCost = m.EstimatedTotalCost
-            }).ToList()
-        };
+        var order = ProductionPlannerHelper.BuildDraftOrder(sim, request, batch, token);
 
         await using var context = await _contextFactory.CreateDbContextAsync();
         bool batchExists = await context.FinishedBatches.AnyAsync(b => b.BatchCode == batch)
@@ -96,6 +74,33 @@ public sealed class ProductionOrderService : IProductionOrderService
             throw new InvalidOperationException($"Ya existe una orden o lote registrado con el código '{batch}'.");
 
         context.ProductionOrders.Add(order);
+        await context.SaveChangesAsync();
+        return (await GetByIdAsync(order.Id))!;
+    }
+
+    public async Task<ProductionOrder> UpdateDraftAsync(UpdateProductionOrderRequest request)
+    {
+        var sim = await SimulateAsync(request.ProductFormulaId, request.PlannedQuantity, request.OverrideLossMarginPercent);
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        var order = await context.ProductionOrders.Include(o => o.Materials)
+            .FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId)
+            ?? throw new InvalidOperationException("Orden de producción no encontrada.");
+
+        if (order.Status != ProductionOrderStatus.Draft)
+            throw new InvalidOperationException("Solo las órdenes en borrador pueden editarse.");
+
+        string batch = string.IsNullOrWhiteSpace(request.BatchCode)
+            ? order.BatchCode
+            : request.BatchCode.Trim().ToUpperInvariant();
+
+        bool batchExists = await context.FinishedBatches.AnyAsync(b => b.BatchCode == batch)
+            || await context.ProductionOrders.AnyAsync(
+                o => o.Id != order.Id && o.BatchCode == batch && o.Status != ProductionOrderStatus.Cancelled);
+        if (batchExists)
+            throw new InvalidOperationException($"Ya existe una orden o lote registrado con el código '{batch}'.");
+
+        context.RemoveRange(order.Materials);
+        ProductionPlannerHelper.ApplyDraftUpdate(order, sim, request, batch);
         await context.SaveChangesAsync();
         return (await GetByIdAsync(order.Id))!;
     }
@@ -135,6 +140,7 @@ public sealed class ProductionOrderService : IProductionOrderService
         try
         {
             ProductionOrder order;
+            decimal wipCleared;
             await using (var context = await _contextFactory.CreateDbContextAsync())
             {
                 using var tx = await context.Database.BeginTransactionAsync();
@@ -142,13 +148,13 @@ public sealed class ProductionOrderService : IProductionOrderService
                     .FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId)
                     ?? throw new InvalidOperationException("Orden de producción no encontrada.");
 
-                await ProductionExecutionHelper.CompleteOrderAsync(context, order, request, tolerance);
+                wipCleared = await ProductionExecutionHelper.CompleteOrderAsync(context, order, request, tolerance);
                 await context.SaveChangesAsync();
                 await tx.CommitAsync();
             }
 
-            if (order.ActualMaterialCost + order.ActualOverheadCost > 0m)
-                await _accounting.PostProductionCompletionAsync(order);
+            if (wipCleared > 0m || order.ActualMaterialCost + order.ActualOverheadCost > 0m)
+                await _accounting.PostProductionCompletionAsync(order, wipMaterialCleared: wipCleared);
             return (await GetByIdAsync(order.Id))!;
         }
         finally

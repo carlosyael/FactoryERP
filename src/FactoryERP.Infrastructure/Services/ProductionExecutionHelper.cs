@@ -40,13 +40,19 @@ internal static class ProductionExecutionHelper
         return matCost;
     }
 
-    public static async Task CompleteOrderAsync(
+    public static async Task<decimal> CompleteOrderAsync(
         AppDbContext context, ProductionOrder order, CompleteProductionRequest request, decimal tolerance)
     {
         if (order.Status != ProductionOrderStatus.InProgress)
             throw new InvalidOperationException("Solo las órdenes en proceso pueden completarse.");
 
-        decimal overheadCost = request.ActualOverheadCost ?? order.ActualOverheadCost;
+        decimal initialWipMaterialCost = order.ActualMaterialCost;
+        if (request.ActualMaterialQuantities is { Count: > 0 })
+        {
+            await ReconcileActualMaterialsAsync(context, order, request.ActualMaterialQuantities);
+        }
+
+        decimal overheadCost = Math.Round(request.ActualOverheadCost ?? order.ActualOverheadCost, 2, MidpointRounding.AwayFromZero);
         if (overheadCost < 0m) throw new ArgumentException("El costo indirecto real no puede ser negativo.");
 
         var costResult = ProductionCostCalculator.CalculateCompletionCosts(
@@ -65,7 +71,7 @@ internal static class ProductionExecutionHelper
         order.Status = ProductionOrderStatus.Completed;
         order.CompletedAt = DateTime.UtcNow;
 
-        if (request.ActualYieldQuantity <= 0) return;
+        if (request.ActualYieldQuantity <= 0) return initialWipMaterialCost;
 
         var product = await context.Products.FindAsync(order.ProductId)
             ?? throw new InvalidOperationException("Producto terminado no encontrado.");
@@ -87,6 +93,37 @@ internal static class ProductionExecutionHelper
             QuantityRemaining = request.ActualYieldQuantity,
             UnitCost = costResult.ActualUnitCost
         });
+        return initialWipMaterialCost;
+    }
+
+    private static async Task ReconcileActualMaterialsAsync(
+        AppDbContext context, ProductionOrder order, IReadOnlyDictionary<int, decimal> actualQuantities)
+    {
+        var matIds = order.Materials.Select(m => m.RawMaterialId).Distinct().ToList();
+        var materials = await context.RawMaterials.Where(m => matIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id);
+
+        foreach (var item in order.Materials.OrderBy(m => m.RawMaterialId))
+        {
+            if (!actualQuantities.TryGetValue(item.RawMaterialId, out decimal rawQty)) continue;
+            if (rawQty < 0m) throw new ArgumentException("La cantidad real consumida no puede ser negativa.");
+
+            decimal roundedActual = Math.Round(rawQty, 4, MidpointRounding.AwayFromZero);
+            decimal deltaQty = Math.Round(roundedActual - item.ActualQuantityUsed, 4, MidpointRounding.AwayFromZero);
+            if (deltaQty != 0m)
+            {
+                if (!materials.TryGetValue(item.RawMaterialId, out var mat))
+                    throw new InvalidOperationException($"Materia prima ID {item.RawMaterialId} no encontrada.");
+                if (deltaQty > 0m && mat.CurrentStock < deltaQty)
+                    throw new InvalidOperationException(
+                        $"Stock insuficiente de '{mat.Name}' para consumo adicional. Faltante: {deltaQty:N2}, Disponible: {mat.CurrentStock:N2}.");
+
+                mat.CurrentStock = Math.Round(mat.CurrentStock - deltaQty, 4, MidpointRounding.AwayFromZero);
+                item.ActualQuantityUsed = roundedActual;
+                item.TotalCost = Math.Round(roundedActual * item.UnitCostAtConsumption, 2, MidpointRounding.AwayFromZero);
+            }
+        }
+
+        order.ActualMaterialCost = Math.Round(order.Materials.Sum(m => m.TotalCost), 2, MidpointRounding.AwayFromZero);
     }
 
     public static async Task<bool> CancelOrderAsync(AppDbContext context, ProductionOrder order, string reason)
@@ -101,8 +138,10 @@ internal static class ProductionExecutionHelper
             var materials = await context.RawMaterials.Where(m => matIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id);
             foreach (var item in order.Materials.OrderBy(m => m.RawMaterialId))
             {
-                materials[item.RawMaterialId].CurrentStock = Math.Round(
-                    materials[item.RawMaterialId].CurrentStock + item.ActualQuantityUsed, 4, MidpointRounding.AwayFromZero);
+                if (!materials.TryGetValue(item.RawMaterialId, out var mat))
+                    throw new InvalidOperationException($"Materia prima ID {item.RawMaterialId} no encontrada.");
+                mat.CurrentStock = Math.Round(
+                    mat.CurrentStock + item.ActualQuantityUsed, 4, MidpointRounding.AwayFromZero);
             }
         }
 

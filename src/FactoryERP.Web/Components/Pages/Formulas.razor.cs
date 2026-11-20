@@ -18,15 +18,27 @@ public partial class Formulas
     private List<ProductFormula> _formulas = new();
     private List<Product> _products = new();
     private List<RawMaterial> _materials = new();
+    private string _currencySymbol = "RD$";
     private decimal _defaultLossMargin = 5m;
+    private string _search = string.Empty;
+    private int _productFilter;
+    private bool _showInactive;
     private readonly Dictionary<int, (decimal MaterialCost, decimal UnitCost)> _formulaSummary = new();
     private ProductFormula _editing = new();
     private List<EditableFormulaItem> _items = new();
     private bool _showModal;
 
+    private IEnumerable<ProductFormula> FilteredFormulas => _formulas.Where(f =>
+        (_showInactive || f.IsActive) &&
+        (_productFilter == 0 || f.ProductId == _productFilter) &&
+        (string.IsNullOrWhiteSpace(_search) ||
+         f.Name.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ||
+         (f.Product?.Name.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ?? false)));
+
     protected override async Task OnInitializedAsync()
     {
         var profile = await BusinessProfileService.GetProfileAsync();
+        _currencySymbol = string.IsNullOrWhiteSpace(profile.CurrencySymbol) ? "RD$" : profile.CurrencySymbol;
         _defaultLossMargin = profile.DefaultLossMarginPercent;
         _products = await ProductService.GetAllAsync();
         _materials = await RawMaterialService.GetAllAsync();
@@ -74,6 +86,17 @@ public partial class Formulas
             RawMaterialId = i.RawMaterialId, QuantityRequired = i.QuantityRequired, UnitOfMeasure = i.UnitOfMeasure
         }).ToList();
         _showModal = true;
+    }
+
+    private async Task CloneVersionAsync(int formulaId)
+    {
+        try
+        {
+            var cloned = await FormulaService.CloneAsNewVersionAsync(formulaId);
+            await LoadFormulasAsync();
+            await Swal.FireAsync("Nueva versión creada", $"Versión v{cloned.Version} creada y lista para editar.", SweetAlertIcon.Success);
+        }
+        catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
     }
 
     private void AddItem()

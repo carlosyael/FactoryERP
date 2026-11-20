@@ -9,5 +9,6 @@ public interface IFormulaService
     Task<ProductFormula?> GetByIdAsync(int id);
     Task<ProductFormula> CreateAsync(ProductFormula formula);
     Task UpdateAsync(ProductFormula formula);
+    Task<ProductFormula> CloneAsNewVersionAsync(int formulaId, string? newVersion = null);
     Task<decimal> CalculateBaseMaterialCostAsync(int formulaId);
 }

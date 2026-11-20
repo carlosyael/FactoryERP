@@ -79,6 +79,19 @@
   - `src/FactoryERP.Web/wwwroot/app.css`: añadido cursor puntero, borde redondeado y estado hover suave en `.nav-group-toggle`.
 - **Verificación:** `dotnet build FactoryERP.sln --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`) y `dotnet test FactoryERP.sln --configuration Release --no-build --verbosity minimal` (`102 / 102` pruebas aprobadas).
 
+## [2026-11-20] — Bloque A Fabricación: Consumo Real, Clonado de Fórmulas, Edición de Borradores y Hoja Imprimible (rama `fix/ux-refinements`)
+- **Requerimiento:** Cerrar las brechas operativas y de integridad detectadas en el módulo de fabricación (`RawMaterials`, `Formulas`, `ProductionOrders`, `FinishedBatches`) con enfoque TDD.
+- **Cambios en Dominio, Servicios y Contabilidad:**
+  - `ProductionModels.cs`, `IFormulaService.cs`, `IProductionOrderService.cs`, `IManufacturingAccountingService.cs`: nuevo contrato `UpdateDraftAsync` (`UpdateProductionOrderRequest`), `CloneAsNewVersionAsync` y soporte de liquidación contable con variación de consumo real de materiales (`wipMaterialCleared`).
+  - `RawMaterialService.cs`: bloqueo en `UpdateAsync` si se intenta cambiar `UnitOfMeasure` hacia una dimensión incompatible con fórmulas existentes.
+  - `FormulaService.cs` + `FormulaValidationHelper.cs`: protección de `UpdateAsync` cuando la fórmula ya tiene órdenes no canceladas (solo permite editar `Instructions` e `IsActive`) y clonación automática a siguiente versión (`CloneAsNewVersionAsync`).
+  - `ProductionPlannerHelper.cs`, `ProductionExecutionHelper.cs`, `ProductionOrderService.cs`, `ManufacturingAccountingService.cs`: rechazo de simulación/órdenes sobre fórmulas o materiales inactivos, edición completa de borradores (`UpdateDraftAsync`), reconciliación real de materiales al cerrar (`ActualMaterialQuantities` con descuento extra o devolución de sobrante a almacén + variación exacta contra `RawMaterialInventory` manteniendo WIP en `0`), y reemplazo de acceso directo a diccionario por `TryGetValue` en `CancelOrderAsync`.
+- **Cambios en UI:**
+  - Nuevo componente `ProductionOrderDetailModal.razor` + soporte `@media print` (`.print-modal`) para visualizar e imprimir la Hoja de Producción (Batch Record).
+  - `ProductionOrders.razor/.cs`: buscador y filtro por estado, botón Detalle/Impresión, edición de órdenes en borrador (`PlannedDate`, `ExpirationDate`, `Notes`), tabla editable de consumo real por insumo al cerrar la orden y moneda dinámica (`CurrencySymbol`).
+  - `Formulas.razor/.cs`, `RawMaterials.razor/.cs`, `FinishedBatches.razor`: filtros por texto/producto/categoría/stock bajo/inactivos, botón **"Nueva versión"**, visualización de instrucciones de receta, semáforo de vencimiento en lotes (`Vencido`, `Por vencer`, `Vigente`) y moneda dinámica desde `IBusinessProfileService`.
+- **Verificación:** `dotnet build FactoryERP.sln --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `dotnet test FactoryERP.sln --configuration Release --no-build --verbosity minimal` (`106 / 106` pruebas aprobadas), `dotnet ef migrations has-pending-model-changes` sin cambios pendientes y todos los `.cs` propios <= 199 líneas.
+
 
 
 

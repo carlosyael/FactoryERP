@@ -39,6 +39,16 @@ public sealed record CreateProductionOrderRequest(
     string? BatchCode,
     string Notes = "");
 
+public sealed record UpdateProductionOrderRequest(
+    int ProductionOrderId,
+    int ProductFormulaId,
+    int PlannedQuantity,
+    decimal? OverrideLossMarginPercent,
+    DateTime? PlannedDate,
+    DateTime? ExpirationDate,
+    string? BatchCode,
+    string Notes = "");
+
 public sealed record CompleteProductionRequest(
     int ProductionOrderId,
     int ActualYieldQuantity,

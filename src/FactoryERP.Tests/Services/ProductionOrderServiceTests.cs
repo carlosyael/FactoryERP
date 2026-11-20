@@ -262,4 +262,90 @@ public class ProductionOrderServiceTests
         cancelled.Status.Should().Be(ProductionOrderStatus.Cancelled);
         (await matSvc.GetByIdAsync(mat.Id))!.CurrentStock.Should().Be(400m);
     }
+
+    [Fact]
+    public async Task CompleteProduction_WithActualMaterialQuantities_ReconcilesStockCostAndWip()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        var (product, formula, baseMat, bottleMat, prodService, matSvc, _, journalSvc) =
+            await SetupAsync(factory, baseStockKg: 20m, bottleStock: 50m);
+
+        // Orden 1: consumo extra de base (+0.5 kg = +250) y devolucion de envases (-2 = -80) => +170 neto
+        var draft1 = await prodService.CreateDraftAsync(new CreateProductionOrderRequest(
+            formula.Id, 10, 0m, null, null, "LOT-ACT-1"));
+        await prodService.StartProductionAsync(draft1.Id);
+
+        var actuals1 = new Dictionary<int, decimal> { [baseMat.Id] = 4.5m, [bottleMat.Id] = 8m };
+        var comp1 = await prodService.CompleteProductionAsync(new CompleteProductionRequest(
+            draft1.Id, 10, 200m, null, "Cierre ajustado", actuals1));
+
+        comp1.ActualMaterialCost.Should().Be(2570m);
+        comp1.ActualUnitCost.Should().Be(277m);
+        (await matSvc.GetByIdAsync(baseMat.Id))!.CurrentStock.Should().Be(15.5m);
+        (await matSvc.GetByIdAsync(bottleMat.Id))!.CurrentStock.Should().Be(42m);
+
+        var entries1 = await journalSvc.GetAllAsync();
+        entries1.Should().HaveCount(2);
+        entries1.All(e => e.Lines.Sum(l => l.Debit) == e.Lines.Sum(l => l.Credit)).Should().BeTrue();
+        var wipNet1 = entries1.SelectMany(e => e.Lines)
+            .Where(l => l.Account!.Code == AccountCodes.WorkInProgressInventory)
+            .Sum(l => l.Debit - l.Credit);
+        wipNet1.Should().Be(0m);
+        entries1[0].Lines.Should().Contain(l => l.Account!.Code == AccountCodes.RawMaterialInventory && l.Credit == 170m);
+
+        // Orden 2: devolucion neta de materiales (-1 kg base = -500) y bloqueo si pide mas del stock disponible
+        var draft2 = await prodService.CreateDraftAsync(new CreateProductionOrderRequest(
+            formula.Id, 10, 0m, null, null, "LOT-ACT-2"));
+        await prodService.StartProductionAsync(draft2.Id);
+
+        Func<Task> overConsume = () => prodService.CompleteProductionAsync(new CompleteProductionRequest(
+            draft2.Id, 10, 200m, null, null, new Dictionary<int, decimal> { [baseMat.Id] = 100m }));
+        await overConsume.Should().ThrowAsync<InvalidOperationException>();
+
+        var comp2 = await prodService.CompleteProductionAsync(new CompleteProductionRequest(
+            draft2.Id, 10, 200m, null, null, new Dictionary<int, decimal> { [baseMat.Id] = 3m }));
+        comp2.ActualMaterialCost.Should().Be(1900m);
+        (await matSvc.GetByIdAsync(baseMat.Id))!.CurrentStock.Should().Be(12.5m);
+
+        var entries2 = await journalSvc.GetAllAsync();
+        entries2[0].Lines.Should().Contain(l => l.Account!.Code == AccountCodes.RawMaterialInventory && l.Debit == 500m);
+        entries2.All(e => e.Lines.Sum(l => l.Debit) == e.Lines.Sum(l => l.Credit)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task UpdateDraft_AndInactiveFormulaOrMaterial_BehaveStrictly()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        var (_, formula, baseMat, _, prodService, matSvc, _, _) = await SetupAsync(factory);
+        var formulaSvc = new FormulaService(factory);
+
+        var draft = await prodService.CreateDraftAsync(new CreateProductionOrderRequest(
+            formula.Id, 10, 5m, null, null, "LOT-UPD-1", "Inicial"));
+
+        var updated = await prodService.UpdateDraftAsync(new UpdateProductionOrderRequest(
+            draft.Id, formula.Id, 20, 10m, DateTime.UtcNow, DateTime.UtcNow.AddMonths(12), "LOT-UPD-2", "Actualizado"));
+
+        updated.PlannedQuantity.Should().Be(20);
+        updated.ExpectedResultingQuantity.Should().Be(18);
+        updated.BatchCode.Should().Be("LOT-UPD-2");
+        updated.Notes.Should().Be("Actualizado");
+        updated.Materials.Should().Contain(m => m.RawMaterialId == baseMat.Id && m.PlannedQuantity == 8m);
+
+        await prodService.StartProductionAsync(draft.Id);
+        Func<Task> editStarted = () => prodService.UpdateDraftAsync(new UpdateProductionOrderRequest(
+            draft.Id, formula.Id, 10, 5m, null, null, "LOT-UPD-2"));
+        await editStarted.Should().ThrowAsync<InvalidOperationException>();
+
+        baseMat.IsActive = false;
+        await matSvc.UpdateAsync(baseMat);
+        Func<Task> inactiveMatSim = () => prodService.SimulateAsync(formula.Id, 10);
+        await inactiveMatSim.Should().ThrowAsync<InvalidOperationException>();
+
+        baseMat.IsActive = true;
+        await matSvc.UpdateAsync(baseMat);
+        formula.IsActive = false;
+        await formulaSvc.UpdateAsync(formula);
+        Func<Task> inactiveFormulaSim = () => prodService.SimulateAsync(formula.Id, 10);
+        await inactiveFormulaSim.Should().ThrowAsync<InvalidOperationException>();
+    }
 }

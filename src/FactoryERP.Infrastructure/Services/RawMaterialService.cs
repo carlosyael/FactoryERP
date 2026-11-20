@@ -1,3 +1,4 @@
+using FactoryERP.Core.Domain;
 using FactoryERP.Core.Entities;
 using FactoryERP.Core.Interfaces;
 using FactoryERP.Infrastructure.Data;
@@ -67,6 +68,21 @@ public sealed class RawMaterialService : IRawMaterialService
         string sku = material.Sku.Trim().ToUpperInvariant();
         if (await context.RawMaterials.AnyAsync(m => m.Sku == sku && m.Id != material.Id))
             throw new InvalidOperationException($"El SKU '{sku}' ya está asignado a otro material.");
+
+        if (existing.UnitOfMeasure != material.UnitOfMeasure)
+        {
+            var usedUnits = await context.FormulaItems
+                .Where(fi => fi.RawMaterialId == material.Id)
+                .Select(fi => fi.UnitOfMeasure)
+                .Distinct()
+                .ToListAsync();
+
+            if (usedUnits.Any(u => !UnitConverter.AreCompatible(u, material.UnitOfMeasure)))
+            {
+                throw new InvalidOperationException(
+                    $"No se puede cambiar la unidad a {material.UnitOfMeasure} porque existen fórmulas que usan una dimensión incompatible.");
+            }
+        }
 
         existing.Sku = sku;
         existing.Name = material.Name.Trim();

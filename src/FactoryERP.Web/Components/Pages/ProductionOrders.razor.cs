@@ -1,4 +1,5 @@
 using CurrieTechnologies.Razor.SweetAlert2;
+using FactoryERP.Core.Domain;
 using FactoryERP.Core.Entities;
 using FactoryERP.Core.Enums;
 using FactoryERP.Core.Interfaces;
@@ -18,23 +19,31 @@ public partial class ProductionOrders
 
     private List<ProductionOrder> _orders = new();
     private List<ProductFormula> _formulas = new();
+    private string _currencySymbol = "RD$";
     private decimal _defaultLossMargin = 5m;
+    private string _search = string.Empty;
+    private string _statusFilter = string.Empty;
+    private ProductionOrder? _detailOrder;
     private ProductionSimulationDto? _simulation;
-    private bool _showCreate;
-    private int _selectedFormulaId;
-    private int _plannedQuantity = 10;
+    private bool _showCreate, _showComplete;
+    private int _editingOrderId, _selectedFormulaId, _plannedQuantity = 10, _actualYield;
+    private string _editingOrderNumber = string.Empty, _batchCode = string.Empty, _draftNotes = string.Empty, _completionNotes = string.Empty;
     private decimal? _lossMargin;
-    private string _batchCode = "";
-
-    private bool _showComplete;
-    private ProductionOrder? _completeTarget;
-    private int _actualYield;
     private decimal _actualOverhead;
-    private DateTime _expirationDate = DateTime.Today.AddMonths(18);
+    private DateTime _plannedDate = DateTime.Today, _draftExpirationDate = DateTime.Today.AddMonths(18), _expirationDate = DateTime.Today.AddMonths(18);
+    private ProductionOrder? _completeTarget;
+    private List<MaterialConsumptionInput> _completeLines = new();
+
+    private IEnumerable<ProductionOrder> FilteredOrders => _orders.Where(o =>
+        (string.IsNullOrWhiteSpace(_statusFilter) || (Enum.TryParse<ProductionOrderStatus>(_statusFilter, out var st) && o.Status == st)) &&
+        (string.IsNullOrWhiteSpace(_search) || o.OrderNumber.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ||
+         o.BatchCode.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) || (o.Product?.Name.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ?? false)));
 
     protected override async Task OnInitializedAsync()
     {
-        _defaultLossMargin = (await BusinessProfileService.GetProfileAsync()).DefaultLossMarginPercent;
+        var profile = await BusinessProfileService.GetProfileAsync();
+        _currencySymbol = string.IsNullOrWhiteSpace(profile.CurrencySymbol) ? "RD$" : profile.CurrencySymbol;
+        _defaultLossMargin = profile.DefaultLossMarginPercent;
         _orders = await ProductionOrderService.GetAllAsync();
         _formulas = await FormulaService.GetAllAsync();
     }
@@ -42,43 +51,51 @@ public partial class ProductionOrders
     private async Task OpenCreateModal()
     {
         var first = _formulas.FirstOrDefault();
-        _selectedFormulaId = first?.Id ?? 0;
-        _plannedQuantity = first?.BaseYieldQuantity ?? 10;
-        _lossMargin = first?.StandardLossMarginPercent ?? _defaultLossMargin;
-        _batchCode = "";
-        _showCreate = true;
+        await InitDraftModalAsync(0, "", first?.Id ?? 0, first?.BaseYieldQuantity ?? 10,
+            first?.StandardLossMarginPercent ?? _defaultLossMargin, "", DateTime.Today, DateTime.Today.AddMonths(18), "");
+    }
+
+    private Task OpenEditDraftModal(ProductionOrder o) => InitDraftModalAsync(
+        o.Id, o.OrderNumber, o.ProductFormulaId, o.PlannedQuantity, o.ExpectedLossMarginPercent, o.BatchCode,
+        o.PlannedDate.ToLocalTime().Date, (o.ExpirationDate ?? o.PlannedDate.AddMonths(18)).ToLocalTime().Date, o.Notes);
+
+    private async Task InitDraftModalAsync(int id, string num, int formulaId, int qty, decimal? loss, string batch, DateTime planned, DateTime exp, string notes)
+    {
+        _editingOrderId = id; _editingOrderNumber = num; _selectedFormulaId = formulaId;
+        _plannedQuantity = qty; _lossMargin = loss; _batchCode = batch;
+        _plannedDate = planned; _draftExpirationDate = exp; _draftNotes = notes;
+        _simulation = null; _showCreate = true;
         if (_selectedFormulaId > 0) await SimulateAsync();
     }
 
     private async Task OnFormulaChangedAsync()
     {
-        var formula = _formulas.FirstOrDefault(f => f.Id == _selectedFormulaId);
-        if (formula != null)
-        {
-            _plannedQuantity = formula.BaseYieldQuantity;
-            _lossMargin = formula.StandardLossMarginPercent;
-            await SimulateAsync();
-        }
+        if (_formulas.FirstOrDefault(f => f.Id == _selectedFormulaId) is not { } f) return;
+        _plannedQuantity = f.BaseYieldQuantity;
+        _lossMargin = f.StandardLossMarginPercent;
+        await SimulateAsync();
     }
 
     private async Task SimulateAsync()
     {
-        try
-        {
-            _simulation = await ProductionOrderService.SimulateAsync(_selectedFormulaId, _plannedQuantity, _lossMargin);
-        }
-        catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
+        try { _simulation = await ProductionOrderService.SimulateAsync(_selectedFormulaId, _plannedQuantity, _lossMargin); }
+        catch (Exception ex) { _simulation = null; await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
     }
 
-    private async Task CreateDraftAsync()
+    private async Task SaveDraftAsync()
     {
         try
         {
-            await ProductionOrderService.CreateDraftAsync(new CreateProductionOrderRequest(
-                _selectedFormulaId, _plannedQuantity, _lossMargin, DateTime.UtcNow, DateTime.UtcNow.AddMonths(18), _batchCode));
+            var plannedUtc = DateTime.SpecifyKind(_plannedDate.Date, DateTimeKind.Utc);
+            var expirationUtc = DateTime.SpecifyKind(_draftExpirationDate.Date, DateTimeKind.Utc);
+            if (_editingOrderId == 0)
+                await ProductionOrderService.CreateDraftAsync(new(_selectedFormulaId, _plannedQuantity, _lossMargin, plannedUtc, expirationUtc, _batchCode, _draftNotes));
+            else
+                await ProductionOrderService.UpdateDraftAsync(new(_editingOrderId, _selectedFormulaId, _plannedQuantity, _lossMargin, plannedUtc, expirationUtc, _batchCode, _draftNotes));
+
             _showCreate = false;
             _orders = await ProductionOrderService.GetAllAsync();
-            await Swal.FireAsync("Orden creada", "Orden planificada en borrador.", SweetAlertIcon.Success);
+            await Swal.FireAsync(_editingOrderId == 0 ? "Orden creada" : "Borrador actualizado", "Orden planificada correctamente.", SweetAlertIcon.Success);
         }
         catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
     }
@@ -98,10 +115,13 @@ public partial class ProductionOrders
 
     private void OpenCompleteModal(ProductionOrder o)
     {
-        _completeTarget = o;
-        _actualYield = o.ExpectedResultingQuantity;
-        _actualOverhead = o.ActualOverheadCost;
-        _expirationDate = o.ExpirationDate ?? DateTime.Today.AddMonths(18);
+        _completeTarget = o; _actualYield = o.ExpectedResultingQuantity; _actualOverhead = o.ActualOverheadCost;
+        _expirationDate = (o.ExpirationDate ?? DateTime.Today.AddMonths(18)).ToLocalTime().Date;
+        _completionNotes = o.Notes;
+        _completeLines = o.Materials.Select(m => new MaterialConsumptionInput(
+            m.RawMaterialId, m.RawMaterial?.Name ?? $"Material #{m.RawMaterialId}",
+            m.RawMaterial != null ? UnitConverter.GetShortLabel(m.RawMaterial.UnitOfMeasure) : "ud",
+            m.PlannedQuantity, m.ActualQuantityUsed, m.RawMaterial?.CurrentStock ?? 0m)).ToList();
         _showComplete = true;
     }
 
@@ -111,8 +131,9 @@ public partial class ProductionOrders
         LoadingService.Show("Cerrando lote...");
         try
         {
-            await ProductionOrderService.CompleteProductionAsync(new CompleteProductionRequest(
-                _completeTarget.Id, _actualYield, _actualOverhead, _expirationDate));
+            var actualMats = _completeLines.ToDictionary(l => l.RawMaterialId, l => l.ActualQty);
+            var expirationUtc = DateTime.SpecifyKind(_expirationDate.Date, DateTimeKind.Utc);
+            await ProductionOrderService.CompleteProductionAsync(new(_completeTarget.Id, _actualYield, _actualOverhead, expirationUtc, _completionNotes, actualMats));
             _showComplete = false;
             _orders = await ProductionOrderService.GetAllAsync();
             await Swal.FireAsync("Lote completado", "Producto terminado ingresado al catálogo y contabilizado.", SweetAlertIcon.Success);
@@ -127,13 +148,9 @@ public partial class ProductionOrders
         {
             Title = "¿Cancelar orden de producción?",
             Text = "Si la orden está en proceso, se devolverán los insumos al almacén y se revertirá el WIP.",
-            Icon = SweetAlertIcon.Warning,
-            ShowCancelButton = true,
-            ConfirmButtonText = "Sí, cancelar",
-            CancelButtonText = "Volver"
+            Icon = SweetAlertIcon.Warning, ShowCancelButton = true, ConfirmButtonText = "Sí, cancelar", CancelButtonText = "Volver"
         });
         if (!confirm.IsConfirmed) return;
-
         try
         {
             await ProductionOrderService.CancelProductionAsync(orderId, "Cancelada desde panel");
@@ -150,4 +167,14 @@ public partial class ProductionOrders
         ProductionOrderStatus.Completed => "bg-success",
         _ => "bg-danger"
     };
+
+    private sealed class MaterialConsumptionInput(int id, string name, string unitLabel, decimal plannedQty, decimal actualQty, decimal availableStock)
+    {
+        public int RawMaterialId { get; } = id;
+        public string Name { get; } = name;
+        public string UnitLabel { get; } = unitLabel;
+        public decimal PlannedQty { get; } = plannedQty;
+        public decimal ActualQty { get; set; } = actualQty;
+        public decimal AvailableStock { get; } = availableStock;
+    }
 }

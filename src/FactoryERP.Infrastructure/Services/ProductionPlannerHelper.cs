@@ -11,6 +11,8 @@ internal static class ProductionPlannerHelper
         int plannedQuantity,
         decimal lossMarginPercent)
     {
+        if (!formula.IsActive)
+            throw new InvalidOperationException($"La fórmula '{formula.Name}' está inactiva y no puede usarse.");
         if (formula.BaseYieldQuantity <= 0)
             throw new InvalidOperationException("El rendimiento base de la fórmula debe ser mayor a cero.");
 
@@ -23,6 +25,8 @@ internal static class ProductionPlannerHelper
         {
             var mat = group.First().RawMaterial
                 ?? throw new InvalidOperationException($"Materia prima ID {group.Key} no encontrada.");
+            if (!mat.IsActive)
+                throw new InvalidOperationException($"La materia prima '{mat.Name}' está inactiva.");
 
             decimal requiredInMatUnit = group.Sum(item =>
                 UnitConverter.Convert(item.QuantityRequired * scaleFactor, item.UnitOfMeasure, mat.UnitOfMeasure));
@@ -66,5 +70,39 @@ internal static class ProductionPlannerHelper
             estUnit,
             requirements.All(r => r.HasSufficientStock),
             requirements);
+    }
+
+    public static ProductionOrder BuildDraftOrder(
+        ProductionSimulationDto sim, CreateProductionOrderRequest request, string batchCode, string token)
+    {
+        var order = new ProductionOrder { OrderNumber = $"OP-{DateTime.UtcNow:yyyyMMdd}-{token}" };
+        ApplyDraftUpdate(order, sim, new UpdateProductionOrderRequest(
+            0, request.ProductFormulaId, request.PlannedQuantity, request.OverrideLossMarginPercent,
+            request.PlannedDate, request.ExpirationDate, batchCode, request.Notes), batchCode);
+        return order;
+    }
+
+    public static void ApplyDraftUpdate(
+        ProductionOrder order, ProductionSimulationDto sim, UpdateProductionOrderRequest request, string batchCode)
+    {
+        order.ProductId = sim.ProductId;
+        order.ProductFormulaId = sim.FormulaId;
+        order.BatchCode = batchCode;
+        order.PlannedDate = request.PlannedDate ?? DateTime.UtcNow;
+        order.ExpirationDate = request.ExpirationDate ?? DateTime.UtcNow.AddMonths(18);
+        order.PlannedQuantity = sim.PlannedQuantity;
+        order.ExpectedLossMarginPercent = sim.ExpectedLossMarginPercent;
+        order.ExpectedResultingQuantity = sim.ExpectedResultingQuantity;
+        order.EstimatedMaterialCost = sim.EstimatedMaterialCost;
+        order.EstimatedOverheadCost = sim.EstimatedOverheadCost;
+        order.Notes = (request.Notes ?? string.Empty).Trim();
+        order.Materials = sim.Materials.Select(m => new ProductionOrderMaterial
+        {
+            RawMaterialId = m.RawMaterialId,
+            PlannedQuantity = m.RequiredQuantity,
+            ActualQuantityUsed = m.RequiredQuantity,
+            UnitCostAtConsumption = m.UnitCost,
+            TotalCost = m.EstimatedTotalCost
+        }).ToList();
     }
 }
