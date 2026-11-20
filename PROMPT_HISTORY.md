@@ -50,6 +50,12 @@
   - **Pipeline CI/CD (`.github/workflows/ci.yml`):** Compilación estricta (`/warnaserror`) + pruebas TDD (`build-and-test`), seguida de login federado **OIDC** (`sp-factoryerp-github-cd`, sin secretos estáticos), build/push Docker a ACR, parche atómico de registro + revisión en Container Apps y verificación automática de `/health`.
 - **Verificación Local:** `dotnet build --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `dotnet ef migrations has-pending-model-changes` sin cambios pendientes, `90/90` pruebas TDD aprobadas y todos los archivos `.cs` propios ≤ 199 líneas.
 
+## [2026-11-20] — Dominio Corto en Cloudflare (`https://factory.zetaflowlab.com`)
+- **Requerimiento:** Acortar la URL larga de Azure Container Apps usando el dominio del usuario en Cloudflare.
+- **Solución:** Desplegado Cloudflare Worker `factoryerp-proxy` en la zona `zetaflowlab.com` con dominio personalizado `factory.zetaflowlab.com` apuntando a `app-factoryerp.braveflower-c95c4a85.canadacentral.azurecontainerapps.io`, preservando redirecciones/cookies (`redirect: "manual"`), reescritura de `Origin`/`Referer`/`Location` y WebSockets passthrough para Blazor Interactive Server.
+- **Verificación en Vivo:** `GET /health` (`200 OK`, `"platform":"Génesis"`, `"database":"connected"`), `GET /catalogo` (`200 OK`), flujo completo `GET/POST /login` autenticado (`200 OK` en `/`) y `POST /_blazor/negotiate` (`200 OK`, `WebSockets`) sobre `https://factory.zetaflowlab.com`.
+
+
 
 
 

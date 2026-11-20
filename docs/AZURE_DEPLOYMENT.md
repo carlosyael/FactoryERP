@@ -4,10 +4,13 @@
 
 ---
 
-## Arquitectura Cloud en Producción (`canadacentral`)
+## Arquitectura Cloud en Producción (`canadacentral` + Cloudflare)
 
 ```
-Internet (HTTPS / TLS) ──▶ Azure Container Apps (app-factoryerp, 0.5 vCPU, 1 GiB, min/max=1)
+Internet (HTTPS / TLS) ──▶ Cloudflare Custom Domain (factory.zetaflowlab.com)
+                                  │  └─ Worker proxy (factoryerp-proxy): WebSockets passthrough + redirect manual
+                                  ▼
+                           Azure Container Apps (app-factoryerp, 0.5 vCPU, 1 GiB, min/max=1)
                                   │  ├─ Blazor Interactive Server (WebSockets / SignalR estable)
                                   │  └─ Usuario no-root appuser, puerto 8080
                                   │
@@ -76,9 +79,13 @@ Para desplegar un nuevo comercio white-label en una suscripción limpia desde la
 
 ---
 
-## Primeros Pasos Post-Despliegue
+## URLs de Producción y Primeros Pasos Post-Despliegue
 
-1. Verificar salud del servicio: `GET https://<fqdn>/health` → responde `200 OK` con `"platform": "Génesis"` y `"database": "connected"`.
+- **Dominio Corto Oficial (Cloudflare Worker `factoryerp-proxy`):** `https://factory.zetaflowlab.com`
+- **Catálogo Público Compartible:** `https://factory.zetaflowlab.com/catalogo`
+- **Origen Azure Container Apps:** `https://app-factoryerp.braveflower-c95c4a85.canadacentral.azurecontainerapps.io`
+
+1. Verificar salud del servicio: `GET https://factory.zetaflowlab.com/health` → responde `200 OK` con `"platform": "Génesis"` y `"database": "connected"`.
 2. Iniciar sesión en `/login` con `admin@factoryerp.local` y la contraseña inicial generada al aprovisionar (cambiar la contraseña o crear usuarios operativos en `/users`).
 3. Ir a **`/settings` (Configuración)** para personalizar **Nombre del Comercio**, slogan, logotipo (persistido en Azure Blob Storage), color primario, RNC, teléfono, dirección y **WhatsApp de pedidos**.
-4. Compartir el enlace público **`https://<fqdn>/catalogo`** con clientes y salones.
+4. Compartir el enlace público **`https://factory.zetaflowlab.com/catalogo`** con clientes y salones.
