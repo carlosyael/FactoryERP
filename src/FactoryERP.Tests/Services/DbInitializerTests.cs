@@ -54,5 +54,6 @@ public class DbInitializerTests
         menus.First(m => m.Url == "formulas").Icon.Should().Be("bi-eyedropper");
         menus.First(m => m.Url == "accounting/trial-balance").Icon.Should().Be("bi-calculator");
         (await verifyCtx.Products.CountAsync()).Should().Be(2);
+        (await verifyCtx.DataProtectionKeys.CountAsync()).Should().Be(0);
     }
 }

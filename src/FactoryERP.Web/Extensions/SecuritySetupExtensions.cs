@@ -18,13 +18,17 @@ public static class SecuritySetupExtensions
         IConfiguration configuration,
         IWebHostEnvironment environment)
     {
-        string keysPath = Environment.GetEnvironmentVariable("DATA_PROTECTION_KEYS_PATH")
-            ?? Path.Combine(environment.ContentRootPath, "dataprotection-keys");
-        Directory.CreateDirectory(keysPath);
-
-        services.AddDataProtection()
-            .PersistKeysToFileSystem(new DirectoryInfo(keysPath))
-            .SetApplicationName("FactoryERP");
+        string? keysPath = Environment.GetEnvironmentVariable("DATA_PROTECTION_KEYS_PATH");
+        var dataProtection = services.AddDataProtection().SetApplicationName("FactoryERP");
+        if (!string.IsNullOrWhiteSpace(keysPath))
+        {
+            Directory.CreateDirectory(keysPath);
+            dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+        }
+        else
+        {
+            dataProtection.PersistKeysToDbContext<AppDbContext>();
+        }
 
         services.AddIdentity<ApplicationUser, IdentityRole>(options =>
         {

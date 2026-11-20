@@ -40,5 +40,16 @@
 - **Cambios:** Actualizados `<PageTitle>` (`MainLayout.razor`, `EmptyLayout.razor`), pie de acceso en `Login.razor` (`Powered by Génesis`), `/health` (`platform: "Génesis"`), subtítulo por defecto en `DbInitializer`/`BusinessProfileService`, y documentación (`README.md`, `PRD.md`, `TECH_STACK.md`, `AGENTS.md`, `docs/ARCHITECTURE_AND_MODULARITY.md`, `docs/AZURE_DEPLOYMENT.md`).
 - **Verificación:** `dotnet build --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`) y `dotnet test --configuration Release` (`86/86` pruebas aprobadas).
 
+## [2026-11-20] — Despliegue en Microsoft Azure Container Apps y Pipeline CI/CD OIDC
+- **Requerimiento:** Desplegar **Génesis / FactoryERP** públicamente en Microsoft Azure accesible vía HTTPS desde cualquier red y automatizar entregas continuas desde GitHub Actions.
+- **Arquitectura Cloud-Native Implementada:**
+  - **Persistencia sin volumen SMB (compatible con Container Apps Express):**
+    - Claves de ASP.NET Core DataProtection persistidas en Azure SQL mediante `Microsoft.AspNetCore.DataProtection.EntityFrameworkCore` (`AppDbContext` + migración `20261120131146_AddDataProtectionKeys`).
+    - Carga y entrega segura de logotipos e imágenes (`/uploads/{folder}/{fileName}`) respaldadas en **Azure Blob Storage** privado (`AzureBlobImageStore` + `FileUploadService` + `MapExternalUploadsEndpoint`), manteniendo compatibilidad local con `wwwroot/uploads` o `UPLOADS_PATH`.
+  - **Recursos en `rg-factoryerp-prod` (`canadacentral`):** `genesisfactoryerp-sql` + `FactoryERP_DB` (`Basic`), `genesisfactoryerpacr` (`Basic`), `genesisfactoryerpst` (`Standard_LRS`, contenedor privado `uploads`), `genesisfactoryerp-env`, y `app-factoryerp` (instancia única `min=1 / max=1` para estabilidad de SignalR Blazor Server, HTTPS externo `https://app-factoryerp.braveflower-c95c4a85.canadacentral.azurecontainerapps.io`).
+  - **Pipeline CI/CD (`.github/workflows/ci.yml`):** Compilación estricta (`/warnaserror`) + pruebas TDD (`build-and-test`), seguida de login federado **OIDC** (`sp-factoryerp-github-cd`, sin secretos estáticos), build/push Docker a ACR, parche atómico de registro + revisión en Container Apps y verificación automática de `/health`.
+- **Verificación Local:** `dotnet build --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `dotnet ef migrations has-pending-model-changes` sin cambios pendientes, `90/90` pruebas TDD aprobadas y todos los archivos `.cs` propios ≤ 199 líneas.
+
+
 
 

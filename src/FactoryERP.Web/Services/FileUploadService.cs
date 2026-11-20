@@ -11,22 +11,51 @@ public interface IFileUploadService
 public sealed class FileUploadService : IFileUploadService
 {
     public const long MaxImageBytes = 5 * 1024 * 1024;
-    private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<string, string> ContentTypesByExtension = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".jpg", ".jpeg", ".png", ".webp"
+        [".jpg"] = "image/jpeg",
+        [".jpeg"] = "image/jpeg",
+        [".png"] = "image/png",
+        [".webp"] = "image/webp"
     };
 
-    private readonly string _webRootPath;
+    private readonly string _uploadsBasePath;
+    private readonly IExternalImageStore? _externalStore;
 
-    public FileUploadService(IWebHostEnvironment env)
-        : this(env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot"))
+    public FileUploadService(IWebHostEnvironment env, IExternalImageStore? externalStore = null)
+        : this(ResolveDefaultUploadsRoot(env), isUploadsRoot: true, externalStore)
     {
     }
 
     public FileUploadService(string webRootPath)
+        : this(Path.Combine(webRootPath, "uploads"), isUploadsRoot: true, null)
     {
-        _webRootPath = Path.GetFullPath(webRootPath);
     }
+
+    public FileUploadService(string basePath, bool isUploadsRoot, IExternalImageStore? externalStore = null)
+    {
+        _uploadsBasePath = Path.GetFullPath(isUploadsRoot ? basePath : Path.Combine(basePath, "uploads"));
+        _externalStore = externalStore;
+    }
+
+    public static bool TryGetContentType(string fileName, out string contentType)
+    {
+        string ext = Path.GetExtension(Path.GetFileName(fileName));
+        if (!string.IsNullOrWhiteSpace(ext) && ContentTypesByExtension.TryGetValue(ext, out string? mapped))
+        {
+            contentType = mapped;
+            return true;
+        }
+
+        contentType = string.Empty;
+        return false;
+    }
+
+    public static bool IsSafePathSegment(string segment) =>
+        !string.IsNullOrWhiteSpace(segment) &&
+        !segment.Contains("..") &&
+        !segment.Contains('/') &&
+        !segment.Contains('\\');
 
     public async Task<string> SaveImageAsync(IBrowserFile file, string folder)
     {
@@ -41,16 +70,25 @@ public sealed class FileUploadService : IFileUploadService
 
         string safeFolder = SanitizeFolder(folder);
         string ext = Path.GetExtension(Path.GetFileName(fileName));
-        if (string.IsNullOrWhiteSpace(ext) || !AllowedExtensions.Contains(ext))
+        if (!TryGetContentType(fileName, out string contentType))
             throw new InvalidOperationException("Formato no permitido. Use JPG, PNG o WEBP.");
 
-        string uploadsBase = Path.GetFullPath(Path.Combine(_webRootPath, "uploads"));
-        string targetDir = Path.GetFullPath(Path.Combine(uploadsBase, safeFolder));
-        if (!targetDir.StartsWith(uploadsBase, StringComparison.OrdinalIgnoreCase))
+        string uniqueName = $"{Guid.NewGuid():N}{ext.ToLowerInvariant()}";
+        if (_externalStore?.IsEnabled == true)
+        {
+            await _externalStore.UploadAsync($"{safeFolder}/{uniqueName}", stream, contentType);
+            return $"/uploads/{safeFolder}/{uniqueName}";
+        }
+
+        string normalizedBase = _uploadsBasePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        string targetDir = Path.GetFullPath(Path.Combine(_uploadsBasePath, safeFolder));
+        string normalizedTarget = targetDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        if (!normalizedTarget.StartsWith(normalizedBase, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Ruta de carga inválida.");
 
         Directory.CreateDirectory(targetDir);
-        string uniqueName = $"{Guid.NewGuid():N}{ext.ToLowerInvariant()}";
         string targetFile = Path.Combine(targetDir, uniqueName);
 
         await using var fs = new FileStream(targetFile, FileMode.CreateNew, FileAccess.Write);
@@ -59,9 +97,19 @@ public sealed class FileUploadService : IFileUploadService
         return $"/uploads/{safeFolder}/{uniqueName}";
     }
 
+    private static string ResolveDefaultUploadsRoot(IWebHostEnvironment env)
+    {
+        string? configured = Environment.GetEnvironmentVariable("UPLOADS_PATH");
+        if (!string.IsNullOrWhiteSpace(configured))
+            return configured;
+
+        string webRoot = env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot");
+        return Path.Combine(webRoot, "uploads");
+    }
+
     private static string SanitizeFolder(string folder)
     {
-        if (string.IsNullOrWhiteSpace(folder) || folder.Contains("..") || folder.Contains('/') || folder.Contains('\\'))
+        if (!IsSafePathSegment(folder))
             throw new InvalidOperationException("Nombre de carpeta de carga inválido.");
 
         return folder.Trim().ToLowerInvariant();

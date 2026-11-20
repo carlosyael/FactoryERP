@@ -23,6 +23,5 @@ USER appuser
 EXPOSE 8080
 ENV ASPNETCORE_URLS="http://+:8080"
 ENV ASPNETCORE_ENVIRONMENT="Production"
-ENV DATA_PROTECTION_KEYS_PATH="/app/dataprotection-keys"
 
 ENTRYPOINT ["dotnet", "FactoryERP.Web.dll"]

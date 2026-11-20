@@ -18,6 +18,7 @@ public static class ServiceRegistrationExtensions
 
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<ILoadingService, LoadingService>();
+        services.AddSingleton<IExternalImageStore, AzureBlobImageStore>();
         services.AddScoped<IFileUploadService, FileUploadService>();
         services.AddScoped<AuditInterceptor>();
 
@@ -77,5 +78,36 @@ public static class ServiceRegistrationExtensions
 
         services.AddDbContextFactory<AppDbContext>(ConfigureOptions, ServiceLifetime.Scoped);
         services.AddDbContext<AppDbContext>(ConfigureOptions);
+    }
+
+    /// <summary>
+    /// Sirve imágenes desde Azure Blob Storage cuando está configurado para persistencia en contenedores.
+    /// </summary>
+    public static WebApplication MapExternalUploadsEndpoint(this WebApplication app)
+    {
+        app.MapGet("/uploads/{folder}/{fileName}", async (
+            string folder,
+            string fileName,
+            HttpContext httpContext,
+            IExternalImageStore store,
+            CancellationToken ct) =>
+        {
+            if (!store.IsEnabled ||
+                !FileUploadService.IsSafePathSegment(folder) ||
+                !FileUploadService.IsSafePathSegment(fileName) ||
+                !FileUploadService.TryGetContentType(fileName, out _))
+            {
+                return Results.NotFound();
+            }
+
+            string blobPath = $"{folder.Trim().ToLowerInvariant()}/{fileName.Trim()}";
+            var file = await store.OpenReadAsync(blobPath, ct);
+            if (file is null) return Results.NotFound();
+
+            httpContext.Response.Headers.CacheControl = "public, max-age=86400";
+            return Results.Stream(file.Value.Stream, file.Value.ContentType);
+        }).AllowAnonymous();
+
+        return app;
     }
 }

@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.FileProviders;
 
 var dominicanCulture = new CultureInfo("es-DO");
 dominicanCulture.NumberFormat.CurrencySymbol = "RD$";
@@ -59,6 +60,19 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
+
+string? uploadsPath = Environment.GetEnvironmentVariable("UPLOADS_PATH");
+if (!string.IsNullOrWhiteSpace(uploadsPath))
+{
+    string fullUploadsPath = Path.GetFullPath(uploadsPath);
+    Directory.CreateDirectory(fullUploadsPath);
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(fullUploadsPath),
+        RequestPath = "/uploads"
+    });
+}
+
 app.MapStaticAssets();
 app.UseRateLimiter();
 app.UseAuthentication();
@@ -66,6 +80,7 @@ app.UseAuthorization();
 app.UseAntiforgery();
 
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+app.MapExternalUploadsEndpoint();
 
 app.MapGet("/health", async (AppDbContext db) =>
 {
