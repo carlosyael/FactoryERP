@@ -31,7 +31,8 @@ public class BusinessProfileServiceTests
             Tagline = "Línea Botánica Profesional",
             WhatsAppNumber = "18095559999",
             PrimaryColor = "#7c2d12",
-            PublicCatalogEnabled = true
+            PublicCatalogEnabled = true,
+            RequireQualityApproval = true
         };
 
         await profileService.UpdateProfileAsync(updated);
@@ -42,6 +43,7 @@ public class BusinessProfileServiceTests
         reloaded.Tagline.Should().Be("Línea Botánica Profesional");
         reloaded.WhatsAppNumber.Should().Be("18095559999");
         reloaded.PrimaryColor.Should().Be("#7c2d12");
+        reloaded.RequireQualityApproval.Should().BeTrue();
     }
 
     [Fact]

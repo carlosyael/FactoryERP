@@ -45,7 +45,7 @@ internal static class ProductionExecutionHelper
     }
 
     public static async Task<decimal> CompleteOrderAsync(
-        AppDbContext context, ProductionOrder order, CompleteProductionRequest request, decimal tolerance)
+        AppDbContext context, ProductionOrder order, CompleteProductionRequest request, decimal tolerance, bool requireQualityApproval = false)
     {
         if (order.Status != ProductionOrderStatus.InProgress)
             throw new InvalidOperationException("Solo las órdenes en proceso pueden completarse.");
@@ -95,7 +95,8 @@ internal static class ProductionExecutionHelper
             ExpirationDate = order.ExpirationDate,
             InitialQuantity = request.ActualYieldQuantity,
             QuantityRemaining = request.ActualYieldQuantity,
-            UnitCost = costResult.ActualUnitCost
+            UnitCost = costResult.ActualUnitCost,
+            QualityStatus = requireQualityApproval ? BatchQualityStatus.Quarantine : BatchQualityStatus.Approved
         });
         return initialWipMaterialCost;
     }

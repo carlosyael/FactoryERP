@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using FactoryERP.Core.Enums;
 
 namespace FactoryERP.Core.Entities;
 
@@ -22,4 +23,19 @@ public class FinishedBatch : BaseEntity
     public int InitialQuantity { get; set; }
     public int QuantityRemaining { get; set; }
     public decimal UnitCost { get; set; }
+
+    public BatchQualityStatus QualityStatus { get; set; } = BatchQualityStatus.Approved;
+
+    [StringLength(400)]
+    public string QualityNotes { get; set; } = string.Empty;
+
+    public DateTime? QualityCheckedAt { get; set; }
+
+    [StringLength(120)]
+    public string QualityCheckedBy { get; set; } = string.Empty;
+
+    public bool IsExpired(DateTime utcToday) => ExpirationDate.HasValue && ExpirationDate.Value.Date < utcToday.Date;
+
+    public bool IsSellable(DateTime utcToday) =>
+        QuantityRemaining > 0 && QualityStatus == BatchQualityStatus.Approved && !IsExpired(utcToday);
 }

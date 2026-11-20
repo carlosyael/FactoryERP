@@ -138,6 +138,7 @@ public sealed class ProductionOrderService : IProductionOrderService
     public async Task<ProductionOrder> CompleteProductionAsync(CompleteProductionRequest request)
     {
         decimal tolerance = await _settings.GetDecimalAsync(SettingKeys.ProductionAbnormalLossTolerancePercent, 2m);
+        bool requireQc = await _settings.GetBoolAsync(SettingKeys.ProductionRequireQualityApproval, false);
         await ProductionGate.WaitAsync();
         try
         {
@@ -150,7 +151,7 @@ public sealed class ProductionOrderService : IProductionOrderService
                     .FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId)
                     ?? throw new InvalidOperationException("Orden de producción no encontrada.");
 
-                wipCleared = await ProductionExecutionHelper.CompleteOrderAsync(context, order, request, tolerance);
+                wipCleared = await ProductionExecutionHelper.CompleteOrderAsync(context, order, request, tolerance, requireQc);
                 await context.SaveChangesAsync();
                 await tx.CommitAsync();
             }

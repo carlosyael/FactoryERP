@@ -35,7 +35,8 @@ public sealed class BusinessProfileService : IBusinessProfileService
             DefaultLossMarginPercent: await _settings.GetDecimalAsync(SettingKeys.ProductionDefaultLossMarginPercent, 5m),
             AbnormalLossTolerancePercent: await _settings.GetDecimalAsync(SettingKeys.ProductionAbnormalLossTolerancePercent, 2m),
             PublicCatalogEnabled: await _settings.GetBoolAsync(SettingKeys.CatalogPublicEnabled, true),
-            CatalogWelcomeMessage: await _settings.GetValueAsync(SettingKeys.CatalogWelcomeMessage, string.Empty));
+            CatalogWelcomeMessage: await _settings.GetValueAsync(SettingKeys.CatalogWelcomeMessage, string.Empty),
+            RequireQualityApproval: await _settings.GetBoolAsync(SettingKeys.ProductionRequireQualityApproval, false));
     }
 
     public async Task UpdateProfileAsync(BusinessProfileDto profile)
@@ -68,6 +69,7 @@ public sealed class BusinessProfileService : IBusinessProfileService
             [SettingKeys.SalesMaxDiscountPercentage] = profile.MaxDiscountPercentage.ToString(CultureInfo.InvariantCulture),
             [SettingKeys.ProductionDefaultLossMarginPercent] = profile.DefaultLossMarginPercent.ToString(CultureInfo.InvariantCulture),
             [SettingKeys.ProductionAbnormalLossTolerancePercent] = profile.AbnormalLossTolerancePercent.ToString(CultureInfo.InvariantCulture),
+            [SettingKeys.ProductionRequireQualityApproval] = profile.RequireQualityApproval ? "true" : "false",
             [SettingKeys.CatalogPublicEnabled] = profile.PublicCatalogEnabled ? "true" : "false",
             [SettingKeys.CatalogWelcomeMessage] = profile.CatalogWelcomeMessage.Trim()
         };

@@ -24,31 +24,34 @@ public sealed class ManufacturingAccountingService : IManufacturingAccountingSer
         if (purchaseOrder.TaxAmount > 0m)
             lines.Add((AccountCodes.TaxCreditAdvance, purchaseOrder.TaxAmount, 0m, $"ITBIS compra {purchaseOrder.OrderNumber}"));
 
-        string settlement = purchaseOrder.PaymentMethod switch { PaymentMethod.Cash => AccountCodes.Cash, PaymentMethod.Credit => AccountCodes.AccountsPayable, _ => AccountCodes.Bank };
+        string settlement = purchaseOrder.PaymentMethod switch
+        {
+            PaymentMethod.Cash => AccountCodes.Cash,
+            PaymentMethod.Credit => AccountCodes.AccountsPayable,
+            _ => AccountCodes.Bank
+        };
         lines.Add((settlement, 0m, purchaseOrder.Total, $"Pago/CxP {purchaseOrder.OrderNumber}"));
-        return CreatePostedEntryAsync(purchaseOrder.PurchaseDate, $"Recepción de compra {purchaseOrder.OrderNumber}", purchaseOrder.OrderNumber, userId, lines);
+        return PostAsync(purchaseOrder.PurchaseDate, $"Recepción de compra {purchaseOrder.OrderNumber}", purchaseOrder.OrderNumber, userId, lines);
     }
 
     public Task<JournalEntry> PostSupplierPaymentAsync(SupplierPayment payment, string? userId = null)
     {
         string cashOrBank = payment.PaymentMethod == PaymentMethod.Cash ? AccountCodes.Cash : AccountCodes.Bank;
-        var lines = new List<(string, decimal, decimal, string)>
-        {
+        return PostAsync(payment.PaymentDate, $"Pago a suplidor #{payment.SupplierId}", payment.Reference, userId,
+        [
             (AccountCodes.AccountsPayable, payment.Amount, 0m, $"Abono a suplidor {payment.Reference}"),
             (cashOrBank, 0m, payment.Amount, $"Desembolso pago suplidor {payment.Reference}")
-        };
-        return CreatePostedEntryAsync(payment.PaymentDate, $"Pago a suplidor #{payment.SupplierId}", payment.Reference, userId, lines);
+        ]);
     }
 
     public Task<JournalEntry> PostProductionStartAsync(ProductionOrder order, decimal materialCost, string? userId = null)
     {
         decimal roundedMat = Math.Round(materialCost, 2, MidpointRounding.AwayFromZero);
-        var lines = new List<(string, decimal, decimal, string)>
-        {
+        return PostAsync(order.StartedAt ?? DateTime.UtcNow, $"Inicio fabricación {order.OrderNumber}", order.OrderNumber, userId,
+        [
             (AccountCodes.WorkInProgressInventory, roundedMat, 0m, $"Inicio orden {order.OrderNumber} (Lote {order.BatchCode})"),
             (AccountCodes.RawMaterialInventory, 0m, roundedMat, $"Consumo materiales {order.OrderNumber}")
-        };
-        return CreatePostedEntryAsync(order.StartedAt ?? DateTime.UtcNow, $"Inicio fabricación {order.OrderNumber}", order.OrderNumber, userId, lines);
+        ]);
     }
 
     public Task<JournalEntry> PostProductionCompletionAsync(
@@ -72,18 +75,17 @@ public sealed class ManufacturingAccountingService : IManufacturingAccountingSer
         if (overheadApplied > 0m)
             lines.Add((AccountCodes.ManufacturingOverheadApplied, 0m, overheadApplied, $"CIF real aplicado orden {order.OrderNumber}"));
 
-        return CreatePostedEntryAsync(order.CompletedAt ?? DateTime.UtcNow, $"Cierre fabricación {order.OrderNumber}", order.OrderNumber, userId, lines);
+        return PostAsync(order.CompletedAt ?? DateTime.UtcNow, $"Cierre fabricación {order.OrderNumber}", order.OrderNumber, userId, lines);
     }
 
     public Task<JournalEntry> PostProductionCancellationAsync(ProductionOrder order, string? userId = null)
     {
         decimal mat = Math.Round(order.ActualMaterialCost, 2, MidpointRounding.AwayFromZero);
-        var lines = new List<(string, decimal, decimal, string)>
-        {
+        return PostAsync(DateTime.UtcNow, $"Cancelación fabricación {order.OrderNumber}", order.OrderNumber, userId,
+        [
             (AccountCodes.RawMaterialInventory, mat, 0m, $"Devolución materiales por cancelación {order.OrderNumber}"),
             (AccountCodes.WorkInProgressInventory, 0m, mat, $"Reverso WIP cancelación {order.OrderNumber}")
-        };
-        return CreatePostedEntryAsync(DateTime.UtcNow, $"Cancelación fabricación {order.OrderNumber}", order.OrderNumber, userId, lines);
+        ]);
     }
 
     public Task<JournalEntry> PostSaleAsync(Sale sale, string? userId = null)
@@ -109,91 +111,55 @@ public sealed class ManufacturingAccountingService : IManufacturingAccountingSer
             lines.Add((AccountCodes.FinishedGoodsInventory, 0m, sale.TotalCogs, $"Salida inventario {sale.SaleNumber}"));
         }
 
-        return CreatePostedEntryAsync(sale.SaleDate, $"Venta comercial {sale.SaleNumber}", sale.SaleNumber, userId, lines);
+        return PostAsync(sale.SaleDate, $"Venta comercial {sale.SaleNumber}", sale.SaleNumber, userId, lines);
     }
 
     public Task<JournalEntry> PostCustomerPaymentAsync(CustomerPayment payment, string? userId = null)
     {
         string cashOrBank = payment.PaymentMethod == PaymentMethod.Cash ? AccountCodes.Cash : AccountCodes.Bank;
-        var lines = new List<(string, decimal, decimal, string)>
-        {
+        return PostAsync(payment.PaymentDate, $"Cobro a cliente #{payment.CustomerId}", payment.Reference, userId,
+        [
             (cashOrBank, payment.Amount, 0m, $"Cobro cliente {payment.Reference}"),
             (AccountCodes.AccountsReceivable, 0m, payment.Amount, $"Abono CxC {payment.Reference}")
-        };
-        return CreatePostedEntryAsync(payment.PaymentDate, $"Cobro a cliente #{payment.CustomerId}", payment.Reference, userId, lines);
+        ]);
     }
 
     public Task<JournalEntry> PostRawMaterialAdjustmentAsync(RawMaterial material, decimal quantityDelta, string reason, string? userId = null)
     {
         decimal amount = Math.Round(Math.Abs(quantityDelta) * material.AverageCost, 2, MidpointRounding.AwayFromZero);
+        return PostInventoryAdjustmentAsync(
+            AccountCodes.RawMaterialInventory, amount, quantityDelta > 0m,
+            $"Ajuste positivo {material.Sku}: {reason}", $"Contrapartida ajuste positivo {material.Sku}",
+            $"Ajuste negativo {material.Sku}: {reason}", $"Salida inventario por ajuste {material.Sku}",
+            $"Ajuste inventario MP {material.Sku}", material.Sku, userId);
+    }
+
+    public Task<JournalEntry> PostFinishedBatchAdjustmentAsync(FinishedBatch batch, int quantityDelta, string reason, string? userId = null)
+    {
+        decimal amount = Math.Round(Math.Abs(quantityDelta) * batch.UnitCost, 2, MidpointRounding.AwayFromZero);
+        return PostInventoryAdjustmentAsync(
+            AccountCodes.FinishedGoodsInventory, amount, quantityDelta > 0,
+            $"Ajuste positivo lote {batch.BatchCode}: {reason}", $"Contrapartida ajuste positivo lote {batch.BatchCode}",
+            $"Baja/merma lote {batch.BatchCode}: {reason}", $"Salida inventario lote {batch.BatchCode}",
+            $"Ajuste inventario PT {batch.BatchCode}", batch.BatchCode, userId);
+    }
+
+    private Task<JournalEntry> PostInventoryAdjustmentAsync(
+        string assetCode, decimal amount, bool isPositive,
+        string posDebitDesc, string posCreditDesc, string negDebitDesc, string negCreditDesc,
+        string concept, string reference, string? userId)
+    {
         if (amount <= 0m)
             throw new InvalidOperationException("El ajuste no tiene valor contable mayor a cero.");
 
-        var lines = quantityDelta > 0m
-            ? new List<(string, decimal, decimal, string)>
-            {
-                (AccountCodes.RawMaterialInventory, amount, 0m, $"Ajuste positivo {material.Sku}: {reason}"),
-                (AccountCodes.RetainedEarnings, 0m, amount, $"Contrapartida ajuste positivo {material.Sku}")
-            }
-            : new List<(string, decimal, decimal, string)>
-            {
-                (AccountCodes.AbnormalProductionLoss, amount, 0m, $"Ajuste negativo {material.Sku}: {reason}"),
-                (AccountCodes.RawMaterialInventory, 0m, amount, $"Salida inventario por ajuste {material.Sku}")
-            };
-
-        return CreatePostedEntryAsync(DateTime.UtcNow, $"Ajuste inventario MP {material.Sku}", material.Sku, userId, lines);
+        List<(string, decimal, decimal, string)> lines = isPositive
+            ? [(assetCode, amount, 0m, posDebitDesc), (AccountCodes.RetainedEarnings, 0m, amount, posCreditDesc)]
+            : [(AccountCodes.AbnormalProductionLoss, amount, 0m, negDebitDesc), (assetCode, 0m, amount, negCreditDesc)];
+        return PostAsync(DateTime.UtcNow, concept, reference, userId, lines);
     }
 
-    private async Task<JournalEntry> CreatePostedEntryAsync(
+    private Task<JournalEntry> PostAsync(
         DateTime date, string concept, string reference, string? userId,
-        List<(string Code, decimal Debit, decimal Credit, string Desc)> rawLines)
-    {
-        var nonZero = rawLines.Where(l => l.Debit > 0m || l.Credit > 0m).ToList();
-        if (nonZero.Count < 2)
-            throw new InvalidOperationException("No se puede generar un asiento contable con menos de dos líneas válidas.");
-
-        await using var context = await _contextFactory.CreateDbContextAsync();
-        var codes = nonZero.Select(l => l.Code).Distinct().ToList();
-        var accountMap = await context.AccountingAccounts.Where(a => codes.Contains(a.Code)).ToDictionaryAsync(a => a.Code);
-
-        var entryLines = new List<JournalEntryLine>();
-        foreach (var (code, debit, credit, desc) in nonZero)
-        {
-            if (!accountMap.TryGetValue(code, out var account))
-                throw new InvalidOperationException($"Cuenta contable requerida '{code}' no existe en el plan de cuentas.");
-
-            entryLines.Add(new JournalEntryLine
-            {
-                AccountId = account.Id,
-                Debit = Math.Round(debit, 2, MidpointRounding.AwayFromZero),
-                Credit = Math.Round(credit, 2, MidpointRounding.AwayFromZero),
-                Description = desc
-            });
-        }
-
-        decimal totalDebit = entryLines.Sum(l => l.Debit);
-        decimal totalCredit = entryLines.Sum(l => l.Credit);
-        if (totalDebit != totalCredit)
-            throw new InvalidOperationException($"Asiento automático descuadrado ({concept}): D={totalDebit:N2} vs C={totalCredit:N2}");
-
-        string? validUserId = (!string.IsNullOrWhiteSpace(userId) && await context.Users.AnyAsync(u => u.Id == userId)) ? userId : null;
-        var entry = new JournalEntry
-        {
-            EntryNumber = $"AST-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}",
-            Date = date,
-            Concept = concept,
-            Reference = reference,
-            Status = JournalEntryStatus.Posted,
-            PostedAt = DateTime.UtcNow,
-            CreatedByUserId = validUserId,
-            Lines = entryLines
-        };
-
-        context.JournalEntries.Add(entry);
-        await context.SaveChangesAsync();
-
-        return await context.JournalEntries.AsNoTracking()
-            .Include(j => j.Lines).ThenInclude(l => l.Account)
-            .FirstAsync(j => j.Id == entry.Id);
-    }
+        List<(string Code, decimal Debit, decimal Credit, string Desc)> lines)
+        => AccountingEntryPoster.CreatePostedEntryAsync(_contextFactory, date, concept, reference, userId, lines);
 }

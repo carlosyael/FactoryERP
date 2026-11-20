@@ -35,10 +35,12 @@ internal static class FefoBatchAllocator
             var calc = PricingCalculator.CalculateSaleLine(
                 reqItem.Quantity, unitPrice, reqItem.DiscountPercent, maxDiscount, product.IsTaxable, taxRate);
 
-            var productBatches = availableBatches.Where(b => b.ProductId == product.Id && b.QuantityRemaining > 0).ToList();
+            DateTime utcToday = DateTime.UtcNow.Date;
+            var productBatches = availableBatches.Where(b => b.ProductId == product.Id && b.IsSellable(utcToday)).ToList();
             int available = productBatches.Sum(b => b.QuantityRemaining);
             if (available < reqItem.Quantity)
-                throw new InvalidOperationException($"Stock insuficiente de '{product.Name}'. Disponible: {available}, Solicitado: {reqItem.Quantity}.");
+                throw new InvalidOperationException(
+                    $"Stock vendible insuficiente de '{product.Name}' (lotes aprobados y vigentes). Disponible: {available}, Solicitado: {reqItem.Quantity}.");
 
             int remainingToPick = reqItem.Quantity;
             decimal allocatedDisc = 0m, allocatedTax = 0m;

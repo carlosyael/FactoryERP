@@ -56,3 +56,13 @@ public sealed record CompleteProductionRequest(
     DateTime? ExpirationDate,
     string? Notes = null,
     IReadOnlyDictionary<int, decimal>? ActualMaterialQuantities = null);
+
+public sealed record UpdateBatchQualityRequest(
+    int BatchId,
+    BatchQualityStatus Status,
+    string Notes = "");
+
+public sealed record AdjustBatchQuantityRequest(
+    int BatchId,
+    int NewQuantity,
+    string Reason);

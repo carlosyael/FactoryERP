@@ -58,7 +58,8 @@ public sealed class DashboardService : IDashboardService
             ? Math.Round(completedLosses.Average(), 2, MidpointRounding.AwayFromZero)
             : 0m;
 
-        int lowProducts = products.Count(p => p.FinishedBatches.Sum(b => b.QuantityRemaining) <= p.MinimumStockLevel);
+        DateTime utcToday = DateTime.UtcNow.Date;
+        int lowProducts = products.Count(p => p.FinishedBatches.Where(b => b.IsSellable(utcToday)).Sum(b => b.QuantityRemaining) <= p.MinimumStockLevel);
         decimal finishedValue = products.Sum(p => p.FinishedBatches.Sum(b => b.QuantityRemaining * b.UnitCost));
         decimal rawValue = materials.Sum(m => m.CurrentStock * m.AverageCost);
 

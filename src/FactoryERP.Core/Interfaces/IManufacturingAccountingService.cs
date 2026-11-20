@@ -12,4 +12,5 @@ public interface IManufacturingAccountingService
     Task<JournalEntry> PostSaleAsync(Sale sale, string? userId = null);
     Task<JournalEntry> PostCustomerPaymentAsync(CustomerPayment payment, string? userId = null);
     Task<JournalEntry> PostRawMaterialAdjustmentAsync(RawMaterial material, decimal quantityDelta, string reason, string? userId = null);
+    Task<JournalEntry> PostFinishedBatchAdjustmentAsync(FinishedBatch batch, int quantityDelta, string reason, string? userId = null);
 }

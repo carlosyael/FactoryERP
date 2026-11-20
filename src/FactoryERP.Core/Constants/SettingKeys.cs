@@ -22,6 +22,7 @@ public static class SettingKeys
     public const string SalesMaxDiscountPercentage = "Sales.MaxDiscountPercentage";
     public const string ProductionDefaultLossMarginPercent = "Production.DefaultLossMarginPercent";
     public const string ProductionAbnormalLossTolerancePercent = "Production.AbnormalLossTolerancePercent";
+    public const string ProductionRequireQualityApproval = "Production.RequireQualityApproval";
 
     public const string CatalogPublicEnabled = "Catalog.PublicEnabled";
     public const string CatalogWelcomeMessage = "Catalog.WelcomeMessage";

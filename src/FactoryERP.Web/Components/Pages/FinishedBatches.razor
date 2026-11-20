@@ -1,15 +1,20 @@
 @page "/batches"
 @attribute [Authorize(Policy = Permissions.ProductionManage)]
-@inject IProductService ProductService
-@inject IBusinessProfileService BusinessProfileService
 
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
     <div>
-        <h3 class="fw-bold mb-0">Lotes Terminados (Trazabilidad FEFO)</h3>
-        <small class="text-muted">Existencias por lote, costo real unitario y alertas de vencimiento</small>
+        <h3 class="fw-bold mb-0">Lotes Terminados (Calidad y Trazabilidad FEFO)</h3>
+        <small class="text-muted">Control de calidad, existencias por lote, vencimientos y bajas de almacén</small>
     </div>
     <div class="d-flex flex-wrap align-items-center gap-2">
-        <input class="form-control form-control-sm" style="width: 220px;" placeholder="Buscar lote o producto..." @bind="_search" @bind:event="oninput" />
+        <input class="form-control form-control-sm" style="width: 200px;" placeholder="Buscar lote o producto..." @bind="_search" @bind:event="oninput" />
+        <select class="form-select form-select-sm" style="width: 155px;" @bind="_qualityFilter">
+            <option value="">Todas las calidades</option>
+            @foreach (var st in Enum.GetValues<BatchQualityStatus>())
+            {
+                <option value="@st">@GetQualityLabel(st)</option>
+            }
+        </select>
         <div class="form-check form-switch mb-0">
             <input class="form-check-input" type="checkbox" id="batchesStockSwitch" @bind="_onlyWithStock" />
             <label class="form-check-label small" for="batchesStockSwitch">Solo con existencia</label>
@@ -19,21 +24,25 @@
 
 @{
     var utcToday = DateTime.UtcNow.Date;
-    int withStockCount = _batches.Count(b => b.QuantityRemaining > 0);
+    int sellableCount = _batches.Count(b => b.IsSellable(utcToday));
+    int quarantineCount = _batches.Count(b => b.QuantityRemaining > 0 && b.QualityStatus == BatchQualityStatus.Quarantine);
+    int rejectedCount = _batches.Count(b => b.QuantityRemaining > 0 && b.QualityStatus == BatchQualityStatus.Rejected);
     int expiringSoonCount = _batches.Count(b => b.QuantityRemaining > 0 && b.ExpirationDate.HasValue && b.ExpirationDate.Value.Date >= utcToday && b.ExpirationDate.Value.Date <= utcToday.AddDays(30));
-    int expiredCount = _batches.Count(b => b.QuantityRemaining > 0 && b.ExpirationDate.HasValue && b.ExpirationDate.Value.Date < utcToday);
+    int expiredCount = _batches.Count(b => b.QuantityRemaining > 0 && b.IsExpired(utcToday));
 }
 <div class="d-flex flex-wrap gap-2 mb-3 small">
-    <span class="badge bg-primary-subtle text-primary">Con existencia: @withStockCount</span>
-    <span class="badge bg-warning-subtle text-warning-emphasis">Por vencer (&le;30d): @expiringSoonCount</span>
-    <span class="badge bg-danger-subtle text-danger">Vencidos con stock: @expiredCount</span>
+    <span class="badge bg-success-subtle text-success">Vendibles: @sellableCount</span>
+    <span class="badge bg-warning-subtle text-warning-emphasis">En Cuarentena: @quarantineCount</span>
+    <span class="badge bg-danger-subtle text-danger">Rechazados: @rejectedCount</span>
+    <span class="badge bg-info-subtle text-info-emphasis">Por vencer (&le;30d): @expiringSoonCount</span>
+    <span class="badge bg-danger text-white">Vencidos con stock: @expiredCount</span>
 </div>
 
 <div class="card p-3">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
-                <tr><th>Lote</th><th>Producto</th><th>Fabricación</th><th>Vencimiento</th><th>Inicial</th><th>Disponible</th><th>Costo Unit.</th></tr>
+                <tr><th>Lote</th><th>Producto</th><th>Fabricación</th><th>Vencimiento</th><th>Inicial</th><th>Disponible</th><th>Costo Unit.</th><th>Calidad</th><th class="text-end">Acciones</th></tr>
             </thead>
             <tbody>
                 @foreach (var b in FilteredBatches)
@@ -55,6 +64,21 @@
                         <td>@b.InitialQuantity</td>
                         <td class="fw-bold">@b.QuantityRemaining</td>
                         <td>@_currencySymbol @b.UnitCost.ToString("N2")</td>
+                        <td>
+                            <span class="badge @GetQualityBadge(b.QualityStatus)">@GetQualityLabel(b.QualityStatus)</span>
+                            @if (!string.IsNullOrWhiteSpace(b.QualityNotes))
+                            {
+                                <div class="text-muted" style="font-size: 0.72rem;">@b.QualityNotes</div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(b.QualityCheckedBy))
+                            {
+                                <div class="text-muted" style="font-size: 0.7rem;">Por: @b.QualityCheckedBy</div>
+                            }
+                        </td>
+                        <td class="text-end text-nowrap">
+                            <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => OpenQualityModal(b)">Calidad</button>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenAdjustModal(b)">Ajustar / Baja</button>
+                        </td>
                     </tr>
                 }
             </tbody>
@@ -62,22 +86,52 @@
     </div>
 </div>
 
-@code {
-    private List<FinishedBatch> _batches = new();
-    private string _currencySymbol = "RD$";
-    private string _search = string.Empty;
-    private bool _onlyWithStock;
+@if (_showQualityModal && _qualityTarget != null)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.45);">
+        <div class="modal-dialog modal-sm"><div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">Control de Calidad: @_qualityTarget.BatchCode</h6>
+                <button type="button" class="btn-close" @onclick="() => _showQualityModal = false"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label small fw-semibold">Dictamen de Calidad</label>
+                <select class="form-select form-select-sm mb-2" @bind="_qualityStatus">
+                    @foreach (var st in Enum.GetValues<BatchQualityStatus>())
+                    {
+                        <option value="@st">@GetQualityLabel(st)</option>
+                    }
+                </select>
+                <label class="form-label small fw-semibold">Observaciones (pH, viscosidad, sellado...)</label>
+                <textarea class="form-control form-control-sm" rows="3" @bind="_qualityNotes"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" @onclick="() => _showQualityModal = false">Cancelar</button>
+                <button class="btn btn-brand btn-sm" @onclick="SaveQualityAsync">Guardar Dictamen</button>
+            </div>
+        </div></div>
+    </div>
+}
 
-    private IEnumerable<FinishedBatch> FilteredBatches => _batches.Where(b =>
-        (!_onlyWithStock || b.QuantityRemaining > 0) &&
-        (string.IsNullOrWhiteSpace(_search) ||
-         b.BatchCode.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ||
-         (b.Product?.Name.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ?? false)));
-
-    protected override async Task OnInitializedAsync()
-    {
-        var profile = await BusinessProfileService.GetProfileAsync();
-        _currencySymbol = string.IsNullOrWhiteSpace(profile.CurrencySymbol) ? "RD$" : profile.CurrencySymbol;
-        _batches = await ProductService.GetBatchesAsync();
-    }
+@if (_showAdjustModal && _adjustTarget != null)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.45);">
+        <div class="modal-dialog modal-sm"><div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">Ajustar Lote: @_adjustTarget.BatchCode</h6>
+                <button type="button" class="btn-close" @onclick="() => _showAdjustModal = false"></button>
+            </div>
+            <div class="modal-body">
+                <div class="small text-muted mb-2">Disponible actual: @_adjustTarget.QuantityRemaining uds</div>
+                <label class="form-label small fw-semibold">Nueva Existencia (uds)</label>
+                <input type="number" min="0" class="form-control form-control-sm mb-2" @bind="_newBatchQty" />
+                <label class="form-label small fw-semibold">Motivo de ajuste / baja</label>
+                <input class="form-control form-control-sm" placeholder="Ej. Daño, muestra, vencimiento..." @bind="_adjustReason" />
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" @onclick="() => _showAdjustModal = false">Cancelar</button>
+                <button class="btn btn-brand btn-sm" @onclick="SaveAdjustAsync">Aplicar Ajuste</button>
+            </div>
+        </div></div>
+    </div>
 }

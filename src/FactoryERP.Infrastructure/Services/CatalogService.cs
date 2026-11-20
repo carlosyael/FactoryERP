@@ -37,9 +37,10 @@ public sealed class CatalogService : ICatalogService
         }
 
         var products = await query.OrderBy(p => p.Line).ThenBy(p => p.Name).ToListAsync();
+        DateTime utcToday = DateTime.UtcNow.Date;
         return products.Select(p =>
         {
-            var activeBatches = p.FinishedBatches.Where(b => b.QuantityRemaining > 0).ToList();
+            var activeBatches = p.FinishedBatches.Where(b => b.IsSellable(utcToday)).ToList();
             int stock = activeBatches.Sum(b => b.QuantityRemaining);
             DateTime? nearestExp = activeBatches
                 .Where(b => b.ExpirationDate.HasValue)
@@ -80,9 +81,10 @@ public sealed class CatalogService : ICatalogService
         }
 
         var products = await query.OrderBy(p => p.Line).ThenBy(p => p.Name).ToListAsync();
+        DateTime utcToday = DateTime.UtcNow.Date;
         var items = products.Select(p =>
         {
-            int stock = p.FinishedBatches.Where(b => b.QuantityRemaining > 0).Sum(b => b.QuantityRemaining);
+            int stock = p.FinishedBatches.Where(b => b.IsSellable(utcToday)).Sum(b => b.QuantityRemaining);
             return new PublicCatalogItemDto(
                 p.Id, p.Sku, p.Name, p.Line, p.Presentation,
                 p.Description, p.Benefits, p.UsageInstructions, p.KeyIngredients, p.ImageUrl,

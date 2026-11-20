@@ -113,6 +113,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IDataProtectionK
         builder.Entity<PurchaseOrder>().HasIndex(x => x.OrderNumber).IsUnique();
         builder.Entity<ProductionOrder>().HasIndex(x => x.OrderNumber).IsUnique();
         builder.Entity<FinishedBatch>().HasIndex(x => x.BatchCode).IsUnique();
+        builder.Entity<FinishedBatch>().HasIndex(x => x.QualityStatus);
         builder.Entity<FinishedBatch>().HasIndex(x => new { x.ProductId, x.ExpirationDate });
         builder.Entity<Sale>().HasIndex(x => x.SaleNumber).IsUnique();
         builder.Entity<AccountingAccount>().HasIndex(x => x.Code).IsUnique();

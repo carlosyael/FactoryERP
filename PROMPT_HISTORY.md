@@ -99,6 +99,20 @@
   - `ProductionOrders.razor/.cs`, `ProductionOrderDetailModal.razor`, `FinishedBatches.razor`, `Formulas.razor/.cs`: eliminación de `.ToLocalTime()` en fechas calendario (`PlannedDate`, `ExpirationDate`) para evitar desfase por zona horaria, preservación en selector de materiales/fórmulas inactivas al editar y recálculo automático al cambiar cantidad o merma.
 - **Verificación:** `dotnet build --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `107 / 107` pruebas aprobadas, `has-pending-model-changes` sin cambios y máximo `199` líneas en `.cs` propios.
 
+## [2026-11-20] — Bloque B: Control de Calidad (QC / Cuarentena), Bloqueo Comercial y Bajas/Ajustes de Lotes (rama `fix/ux-refinements`)
+- **Requerimiento:** Incorporar liberación de Control de Calidad en lotes terminados, impedir la venta/oferta de lotes en cuarentena, rechazados o vencidos, y soportar bajas/ajustes contables de existencias de producto terminado.
+- **Cambios en Core, Infraestructura y Contabilidad:**
+  - `BatchQualityStatus.cs`, `FinishedBatch.cs`: estados `Approved`, `Quarantine`, `Rejected`, trazabilidad (`QualityNotes`, `QualityCheckedAt`, `QualityCheckedBy`) y reglas de dominio `IsExpired` / `IsSellable`.
+  - `SettingKeys.ProductionRequireQualityApproval`, `BusinessProfileDto`, `DbInitializer.cs`, `BusinessProfileService.cs`: parámetro global configurable para enviar nuevos lotes producidos automáticamente a Cuarentena.
+  - `ProductionOrderService.cs` + `ProductionExecutionHelper.cs`: asignación automática de `Quarantine` o `Approved` al completar orden según configuración.
+  - `IBatchQualityService`, `BatchQualityService.cs`, `AccountingEntryPoster.cs`, `ManufacturingAccountingService.cs` (`PostFinishedBatchAdjustmentAsync`), `ServiceRegistrationExtensions.cs`: flujo completo para dictamen de calidad y ajustes/bajas de inventario terminado con asiento automático balanceado (`5102` vs `1103-03` o `1103-03` vs `3102`).
+  - `SaleService.cs`, `FefoBatchAllocator.cs`, `CatalogService.cs`, `DashboardService.cs`: filtrado consistente por `IsSellable(utcToday)` en asignación FEFO, catálogos interno/público y alertas de stock bajo.
+  - Migración EF Core `20261120183623_AddFinishedBatchQualityControl` (`QualityStatus` por defecto `0`, `QualityNotes`, `QualityCheckedAt`, `QualityCheckedBy`, índice en `QualityStatus`).
+- **Cambios en UI y Pruebas:**
+  - `Settings.razor/.cs`, `Sales.razor`, `FinishedBatches.razor/.cs`: interruptor QC en configuración, stock vendible en selector de ventas, resumen superior (Vendibles, En Cuarentena, Rechazados, Por vencer, Vencidos), filtro por calidad y modales `Calidad` y `Ajustar / Baja`.
+  - Nuevas pruebas en `BatchQualityServiceTests.cs` y ampliación en `BusinessProfileServiceTests.cs`.
+- **Verificación:** `dotnet build --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `110 / 110` pruebas aprobadas, `has-pending-model-changes` sin cambios, máximo `199` líneas en `.cs` propios y smoke test HTTP autenticado (`200 OK` en `/raw-materials`, `/formulas`, `/production`, `/batches`, `/settings`, `/sales`, `/catalogo`).
+
 
 
 

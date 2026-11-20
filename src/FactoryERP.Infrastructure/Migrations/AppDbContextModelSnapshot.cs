@@ -407,6 +407,22 @@ namespace FactoryERP.Infrastructure.Migrations
                     b.Property<int?>("ProductionOrderId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("QualityCheckedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("QualityCheckedBy")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("QualityNotes")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<int>("QualityStatus")
+                        .HasColumnType("int");
+
                     b.Property<int>("QuantityRemaining")
                         .HasColumnType("int");
 
@@ -426,6 +442,8 @@ namespace FactoryERP.Infrastructure.Migrations
                         .IsUnique();
 
                     b.HasIndex("ProductionOrderId");
+
+                    b.HasIndex("QualityStatus");
 
                     b.HasIndex("ProductId", "ExpirationDate");
 

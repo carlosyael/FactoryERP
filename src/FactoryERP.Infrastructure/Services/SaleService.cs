@@ -68,8 +68,12 @@ public sealed class SaleService : ISaleService
 
                 var productIds = request.Items.Select(i => i.ProductId).Distinct().OrderBy(id => id).ToList();
                 var products = await context.Products.Where(p => productIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id);
+                DateTime utcToday = DateTime.UtcNow.Date;
                 var batches = await context.FinishedBatches
-                    .Where(b => productIds.Contains(b.ProductId) && b.QuantityRemaining > 0)
+                    .Where(b => productIds.Contains(b.ProductId)
+                                && b.QuantityRemaining > 0
+                                && b.QualityStatus == BatchQualityStatus.Approved
+                                && (!b.ExpirationDate.HasValue || b.ExpirationDate.Value >= utcToday))
                     .OrderBy(b => b.ExpirationDate ?? DateTime.MaxValue)
                     .ThenBy(b => b.ProductionDate)
                     .ThenBy(b => b.Id)

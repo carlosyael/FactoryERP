@@ -91,6 +91,7 @@ public partial class Settings
         public decimal MaxDiscountPercentage { get; set; } = 30m;
         public decimal DefaultLossMarginPercent { get; set; } = 5m;
         public decimal AbnormalLossTolerancePercent { get; set; } = 2m;
+        public bool RequireQualityApproval { get; set; }
         public bool PublicCatalogEnabled { get; set; } = true;
         public string CatalogWelcomeMessage { get; set; } = "";
 
@@ -101,13 +102,14 @@ public partial class Settings
             LogoUrl = d.LogoUrl, PrimaryColor = d.PrimaryColor, CurrencySymbol = d.CurrencySymbol,
             DefaultTaxRate = d.DefaultTaxRate, ElectronicInvoicingEnabled = d.ElectronicInvoicingEnabled,
             MaxDiscountPercentage = d.MaxDiscountPercentage, DefaultLossMarginPercent = d.DefaultLossMarginPercent,
-            AbnormalLossTolerancePercent = d.AbnormalLossTolerancePercent, PublicCatalogEnabled = d.PublicCatalogEnabled,
-            CatalogWelcomeMessage = d.CatalogWelcomeMessage
+            AbnormalLossTolerancePercent = d.AbnormalLossTolerancePercent, RequireQualityApproval = d.RequireQualityApproval,
+            PublicCatalogEnabled = d.PublicCatalogEnabled, CatalogWelcomeMessage = d.CatalogWelcomeMessage
         };
 
         public BusinessProfileDto ToDto() => new(
             BusinessName, Tagline, Rnc, Phone, WhatsAppNumber, Email, Address, LogoUrl, PrimaryColor,
             CurrencySymbol, DefaultTaxRate, ElectronicInvoicingEnabled, MaxDiscountPercentage,
-            DefaultLossMarginPercent, AbnormalLossTolerancePercent, PublicCatalogEnabled, CatalogWelcomeMessage);
+            DefaultLossMarginPercent, AbnormalLossTolerancePercent, PublicCatalogEnabled, CatalogWelcomeMessage,
+            RequireQualityApproval);
     }
 }

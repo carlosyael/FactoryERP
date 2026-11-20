@@ -20,4 +20,5 @@ public sealed record BusinessProfileDto(
     decimal DefaultLossMarginPercent,
     decimal AbnormalLossTolerancePercent,
     bool PublicCatalogEnabled,
-    string CatalogWelcomeMessage);
+    string CatalogWelcomeMessage,
+    bool RequireQualityApproval = false);

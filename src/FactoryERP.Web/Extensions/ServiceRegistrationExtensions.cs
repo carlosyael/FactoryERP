@@ -45,6 +45,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IProductService, ProductService>();
         services.AddScoped<IFormulaService, FormulaService>();
         services.AddScoped<IProductionOrderService, ProductionOrderService>();
+        services.AddScoped<IBatchQualityService, BatchQualityService>();
 
         services.AddScoped<ICustomerService, CustomerService>();
         services.AddScoped<ISaleService, SaleService>();
