@@ -77,9 +77,14 @@
                                 <a class="btn btn-sm btn-outline-secondary me-1" href="/kardex?search=@Uri.EscapeDataString(b.BatchCode)" title="Ver Kardex">
                                     <i class="bi bi-clock-history"></i>
                                 </a>
-                                <button class="btn btn-sm btn-outline-primary" @onclick="() => OpenRecallModalAsync(b.Id)">
+                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => OpenRecallModalAsync(b.Id)">
                                     Trazabilidad / Recall
                                 </button>
+                                <AuthorizeView Policy="@Permissions.RawMaterialsManage">
+                                    <Authorized>
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenAdjustModal(b)">Ajustar / Baja</button>
+                                    </Authorized>
+                                </AuthorizeView>
                             </td>
                         </tr>
                     }
@@ -135,6 +140,37 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-brand btn-sm" @onclick="() => _recallData = null">Cerrar</button>
+            </div>
+        </div></div>
+    </div>
+}
+
+@if (_showAdjustModal && _adjustTarget != null)
+{
+    string adjUnit = _adjustTarget.RawMaterial != null ? UnitConverter.GetShortLabel(_adjustTarget.RawMaterial.UnitOfMeasure) : "ud";
+    decimal avgCost = _adjustTarget.RawMaterial?.AverageCost ?? _adjustTarget.UnitCost;
+    decimal deltaPreview = Math.Round(_adjustNewQty - _adjustTarget.QuantityRemaining, 4, MidpointRounding.AwayFromZero);
+    decimal impactPreview = Math.Round(Math.Abs(deltaPreview) * avgCost, 2, MidpointRounding.AwayFromZero);
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.45);">
+        <div class="modal-dialog modal-sm"><div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">Ajustar Lote MP: @_adjustTarget.BatchCode</h6>
+                <button type="button" class="btn-close" @onclick="() => _showAdjustModal = false"></button>
+            </div>
+            <div class="modal-body">
+                <div class="small fw-semibold mb-1">@_adjustTarget.RawMaterial?.Name</div>
+                <div class="small text-muted mb-2">Existencia del lote: @_adjustTarget.QuantityRemaining.ToString("N2") @adjUnit</div>
+                <label class="form-label small fw-semibold">Nueva Cantidad (@adjUnit)</label>
+                <input type="number" step="0.0001" min="0" class="form-control form-control-sm mb-2" @bind="_adjustNewQty" />
+                <div class="small mb-2 @(deltaPreview < 0m ? "text-danger" : deltaPreview > 0m ? "text-success" : "text-muted")">
+                    Diferencia: @(deltaPreview >= 0m ? "+" : "")@deltaPreview.ToString("N2") @adjUnit | Impacto: @_currencySymbol @impactPreview.ToString("N2")
+                </div>
+                <label class="form-label small fw-semibold">Motivo</label>
+                <input class="form-control form-control-sm" placeholder="Ej. Baja por vencimiento, derrame..." @bind="_adjustReason" />
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" @onclick="() => _showAdjustModal = false">Cancelar</button>
+                <button class="btn btn-brand btn-sm" @onclick="SaveAdjustAsync">Aplicar Ajuste</button>
             </div>
         </div></div>
     </div>

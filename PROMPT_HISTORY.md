@@ -152,7 +152,12 @@
   - Nuevo `RawMaterialBatchServiceTests.cs` y actualización de `DbInitializerTests.cs`.
 - **Verificación:** `dotnet build --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `114 / 114` pruebas aprobadas, `has-pending-model-changes` sin cambios, máximo `195` líneas en `.cs` propios y smoke test HTTP autenticado (`200 OK` en `/raw-material-batches`, `/purchases`, `/raw-materials`, `/production`, `/batches`, `/kardex`).
 
-
-
-
+## [2026-11-20] — Auditoría Profunda Bloque C2: Bajas/Ajustes por Lote MP, Sincronización Stock-Lote y Guardas de Compra (rama `fix/ux-refinements`)
+- **Correcciones Aplicadas:**
+  - `InventoryModels.cs`, `IRawMaterialBatchService.cs`, `RawMaterialBatchService.cs`: nuevo contrato `AdjustBatchQuantityAsync` (`AdjustRawMaterialBatchRequest`) protegido por `InventoryConcurrencyGate.RawMaterialGate` que actualiza atómicamente `RawMaterialBatch.QuantityRemaining` + `RawMaterial.CurrentStock`, registra movimiento Kardex con el `BatchCode` exacto y contabiliza la pérdida o ajuste (`PostRawMaterialAdjustmentAsync`), evitando el doble descuento al dar de baja lotes vencidos.
+  - `RawMaterialBatchAllocator.cs`, `RawMaterialService.cs`: incorporación de `ReconcileOnStockReductionAsync` al reducir existencias directamente desde `/raw-materials` (drenando lotes vencidos/FEFO primero para mantener la invariante `Σ lotes <= CurrentStock`) y concatenación de códigos de lote múltiples (`LMP-A, LMP-B`) en Kardex FEFO/devoluciones.
+  - `PurchaseOrderService.cs`: bloqueo de compras hacia suplidores o materias primas inactivas.
+  - `RawMaterialBatches.razor/.cs`: modal `"Ajustar / Baja"` con valores sugeridos para lotes vencidos y vista previa del impacto contable.
+  - `RawMaterialBatchServiceTests.cs`, `PurchaseOrderServiceTests.cs`: pruebas de baja de lote vencido, sincronización de ajuste descendente, Kardex multi-lote y rechazo de compras con suplidor/insumo inactivo.
+- **Verificación:** `dotnet build --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `116 / 116` pruebas aprobadas, `has-pending-model-changes --configuration Release` sin cambios y máximo `195` líneas en `.cs` propios.
 

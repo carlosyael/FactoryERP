@@ -117,4 +117,33 @@ public class PurchaseOrderServiceTests
         po.Total.Should().Be(0m);
         (await materialService.GetByIdAsync(mat.Id))!.CurrentStock.Should().Be(25m);
     }
+
+    [Fact]
+    public async Task ReceivePurchase_InactiveSupplierOrMaterial_ThrowsInvalidOperationException()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        await new ChartOfAccountsService(factory).SeedStandardChartAsync();
+
+        var settings = new SystemSettingService(factory, new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions()));
+        var accounting = new ManufacturingAccountingService(factory);
+        var supplierService = new SupplierService(factory, accounting);
+        var materialService = new RawMaterialService(factory, accounting);
+        var purchaseService = new PurchaseOrderService(factory, settings, accounting);
+
+        var supplier = await supplierService.CreateAsync(new Supplier { Name = "Suplidor Inactivo", IsActive = false });
+        var mat = await materialService.CreateAsync(new RawMaterial { Sku = "MP-INACT-1", Name = "Material Activo", UnitOfMeasure = UnitOfMeasure.Milliliter });
+
+        Func<Task> inactiveSupAct = () => purchaseService.ReceivePurchaseAsync(
+            new(supplier.Id, PaymentMethod.Cash, null, "", [new(mat.Id, 10m, 5m)]));
+        await inactiveSupAct.Should().ThrowAsync<InvalidOperationException>();
+
+        supplier.IsActive = true;
+        await supplierService.UpdateAsync(supplier);
+        mat.IsActive = false;
+        await materialService.UpdateAsync(mat);
+
+        Func<Task> inactiveMatAct = () => purchaseService.ReceivePurchaseAsync(
+            new(supplier.Id, PaymentMethod.Cash, null, "", [new(mat.Id, 10m, 5m)]));
+        await inactiveMatAct.Should().ThrowAsync<InvalidOperationException>();
+    }
 }

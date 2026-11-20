@@ -134,12 +134,15 @@ public sealed class RawMaterialService : IRawMaterialService
 
             decimal roundedNew = Math.Round(newStock, 4, MidpointRounding.AwayFromZero);
             delta = roundedNew - material.CurrentStock;
+            string? batchCode = delta < 0m
+                ? await RawMaterialBatchAllocator.ReconcileOnStockReductionAsync(context, rawMaterialId, roundedNew)
+                : null;
             material.CurrentStock = roundedNew;
             if (delta != 0m)
             {
                 InventoryKardexRecorder.RecordRawMaterial(
                     context, material, InventoryMovementType.RawMaterialAdjustment, delta, material.AverageCost,
-                    material.Sku, reason.Trim(), _currentUser?.UserName);
+                    material.Sku, reason.Trim(), _currentUser?.UserName, batchCode: batchCode ?? material.Sku);
             }
             await context.SaveChangesAsync();
             await tx.CommitAsync();

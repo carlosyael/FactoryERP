@@ -67,6 +67,8 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
             using var tx = await context.Database.BeginTransactionAsync();
             var supplier = await context.Suppliers.FindAsync(request.SupplierId)
                 ?? throw new InvalidOperationException("Suplidor no encontrado.");
+            if (!supplier.IsActive)
+                throw new InvalidOperationException($"El suplidor '{supplier.Name}' está inactivo y no puede registrar compras.");
 
             var materialIds = request.Items.Select(i => i.RawMaterialId).Distinct().OrderBy(id => id).ToList();
             var materials = await context.RawMaterials
@@ -87,6 +89,8 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
 
                 if (!materials.TryGetValue(reqItem.RawMaterialId, out var material))
                     throw new InvalidOperationException($"Materia prima ID {reqItem.RawMaterialId} no encontrada.");
+                if (!material.IsActive)
+                    throw new InvalidOperationException($"La materia prima '{material.Name}' ({material.Sku}) está inactiva y no puede recibirse en compras.");
 
                 decimal lineSub = Math.Round(reqItem.Quantity * reqItem.UnitCost, 2, MidpointRounding.AwayFromZero);
                 decimal lineTax = reqItem.IsTaxable ? Math.Round(lineSub * taxRate, 2, MidpointRounding.AwayFromZero) : 0m;

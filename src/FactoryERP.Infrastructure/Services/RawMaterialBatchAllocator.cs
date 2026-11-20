@@ -40,14 +40,14 @@ internal static class RawMaterialBatchAllocator
                 $"Stock vigente insuficiente de '{material.Name}'. Requerido: {quantityToConsume:N2}, Vigente disponible: {Math.Max(0m, usableTotal):N2}.");
 
         decimal remaining = quantityToConsume;
-        string? primaryBatchCode = null;
+        var usedCodes = new List<string>();
         foreach (var batch in batches.Where(b => b.IsUsable(utcToday)))
         {
             if (remaining <= 0m) break;
             decimal take = Math.Min(remaining, batch.QuantityRemaining);
             batch.QuantityRemaining = Math.Round(batch.QuantityRemaining - take, 4, MidpointRounding.AwayFromZero);
             remaining = Math.Round(remaining - take, 4, MidpointRounding.AwayFromZero);
-            primaryBatchCode ??= batch.BatchCode;
+            if (!usedCodes.Contains(batch.BatchCode)) usedCodes.Add(batch.BatchCode);
 
             var existing = order.BatchAllocations.FirstOrDefault(a => a.RawMaterialBatchId == batch.Id);
             if (existing != null) existing.QuantityAllocated = Math.Round(existing.QuantityAllocated + take, 4, MidpointRounding.AwayFromZero);
@@ -60,7 +60,7 @@ internal static class RawMaterialBatchAllocator
             });
         }
 
-        return primaryBatchCode;
+        return usedCodes.Count == 0 ? null : string.Join(", ", usedCodes);
     }
 
     public static async Task<string?> RestoreAllocatedAsync(
@@ -76,7 +76,7 @@ internal static class RawMaterialBatchAllocator
         var batchMap = await context.RawMaterialBatches.Where(b => batchIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id);
 
         decimal remaining = quantityToRestore;
-        string? primaryBatchCode = null;
+        var usedCodes = new List<string>();
         foreach (var alloc in allocations)
         {
             if (remaining <= 0m) break;
@@ -85,9 +85,36 @@ internal static class RawMaterialBatchAllocator
             alloc.QuantityAllocated = Math.Round(alloc.QuantityAllocated - restore, 4, MidpointRounding.AwayFromZero);
             batch.QuantityRemaining = Math.Round(batch.QuantityRemaining + restore, 4, MidpointRounding.AwayFromZero);
             remaining = Math.Round(remaining - restore, 4, MidpointRounding.AwayFromZero);
-            primaryBatchCode ??= batch.BatchCode;
+            if (!usedCodes.Contains(batch.BatchCode)) usedCodes.Add(batch.BatchCode);
         }
 
-        return primaryBatchCode;
+        return usedCodes.Count == 0 ? null : string.Join(", ", usedCodes);
+    }
+
+    public static async Task<string?> ReconcileOnStockReductionAsync(
+        AppDbContext context, int rawMaterialId, decimal newPhysicalStock)
+    {
+        var batches = await context.RawMaterialBatches
+            .Where(b => b.RawMaterialId == rawMaterialId && b.QuantityRemaining > 0m)
+            .OrderBy(b => b.ExpirationDate ?? DateTime.MaxValue)
+            .ThenBy(b => b.ReceivedDate)
+            .ThenBy(b => b.Id)
+            .ToListAsync();
+
+        decimal trackedTotal = Math.Round(batches.Sum(b => b.QuantityRemaining), 4, MidpointRounding.AwayFromZero);
+        if (trackedTotal <= newPhysicalStock) return null;
+
+        decimal excess = Math.Round(trackedTotal - newPhysicalStock, 4, MidpointRounding.AwayFromZero);
+        var drainedCodes = new List<string>();
+        foreach (var batch in batches)
+        {
+            if (excess <= 0m) break;
+            decimal take = Math.Min(excess, batch.QuantityRemaining);
+            batch.QuantityRemaining = Math.Round(batch.QuantityRemaining - take, 4, MidpointRounding.AwayFromZero);
+            excess = Math.Round(excess - take, 4, MidpointRounding.AwayFromZero);
+            if (!drainedCodes.Contains(batch.BatchCode)) drainedCodes.Add(batch.BatchCode);
+        }
+
+        return drainedCodes.Count == 0 ? null : string.Join(", ", drainedCodes);
     }
 }

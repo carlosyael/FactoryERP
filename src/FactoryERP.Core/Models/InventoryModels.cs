@@ -26,3 +26,8 @@ public sealed record RecallAffectedOrderDto(
 public sealed record RawMaterialBatchRecallDto(
     RawMaterialBatch Batch,
     IReadOnlyList<RecallAffectedOrderDto> AffectedOrders);
+
+public sealed record AdjustRawMaterialBatchRequest(
+    int BatchId,
+    decimal NewQuantity,
+    string Reason);
