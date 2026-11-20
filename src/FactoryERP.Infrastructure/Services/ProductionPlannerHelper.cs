@@ -95,7 +95,7 @@ internal static class ProductionPlannerHelper
         order.ExpectedResultingQuantity = sim.ExpectedResultingQuantity;
         order.EstimatedMaterialCost = sim.EstimatedMaterialCost;
         order.EstimatedOverheadCost = sim.EstimatedOverheadCost;
-        order.Notes = (request.Notes ?? string.Empty).Trim();
+        order.Notes = TruncateNotes(request.Notes);
         order.Materials = sim.Materials.Select(m => new ProductionOrderMaterial
         {
             RawMaterialId = m.RawMaterialId,
@@ -104,5 +104,11 @@ internal static class ProductionPlannerHelper
             UnitCostAtConsumption = m.UnitCost,
             TotalCost = m.EstimatedTotalCost
         }).ToList();
+    }
+
+    internal static string TruncateNotes(string? notes, int maxLength = 400)
+    {
+        string trimmed = (notes ?? string.Empty).Trim();
+        return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
     }
 }

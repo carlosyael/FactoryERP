@@ -92,6 +92,13 @@
   - `Formulas.razor/.cs`, `RawMaterials.razor/.cs`, `FinishedBatches.razor`: filtros por texto/producto/categoría/stock bajo/inactivos, botón **"Nueva versión"**, visualización de instrucciones de receta, semáforo de vencimiento en lotes (`Vencido`, `Por vencer`, `Vigente`) y moneda dinámica desde `IBusinessProfileService`.
 - **Verificación:** `dotnet build FactoryERP.sln --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `dotnet test FactoryERP.sln --configuration Release --no-build --verbosity minimal` (`106 / 106` pruebas aprobadas), `dotnet ef migrations has-pending-model-changes` sin cambios pendientes y todos los `.cs` propios <= 199 líneas.
 
+## [2026-11-20] — Auditoría Profunda Bloque A: Validaciones en Inicio, Fechas Calendario y Unicidad de Fórmulas (rama `fix/ux-refinements`)
+- **Correcciones Aplicadas:**
+  - `ProductionOrderService.cs`, `ProductionExecutionHelper.cs`, `ProductionPlannerHelper.cs`: validación en `StartOrderAsync` contra fórmulas o insumos desactivados tras crear el borrador, bloqueo de consumo adicional (`deltaQty > 0m`) sobre insumos inactivos permitiendo devolución de sobrantes, y truncamiento seguro de `Notes` a 400 caracteres (`TruncateNotes`).
+  - `FormulaValidationHelper.cs`: verificación de cambio de `Name` en `HasStructuralChanges` para fórmulas con órdenes activas/históricas y exigencia de `Version` no vacía ni duplicada por producto.
+  - `ProductionOrders.razor/.cs`, `ProductionOrderDetailModal.razor`, `FinishedBatches.razor`, `Formulas.razor/.cs`: eliminación de `.ToLocalTime()` en fechas calendario (`PlannedDate`, `ExpirationDate`) para evitar desfase por zona horaria, preservación en selector de materiales/fórmulas inactivas al editar y recálculo automático al cambiar cantidad o merma.
+- **Verificación:** `dotnet build --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `107 / 107` pruebas aprobadas, `has-pending-model-changes` sin cambios y máximo `199` líneas en `.cs` propios.
+
 
 
 

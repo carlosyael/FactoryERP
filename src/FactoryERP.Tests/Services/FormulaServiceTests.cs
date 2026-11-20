@@ -193,5 +193,29 @@ public class FormulaServiceTests
 
         var v12 = await formulaService.CloneAsNewVersionAsync(v1.Id);
         v12.Version.Should().Be("1.2");
+
+        // Bloquear cambio de Name en formula con ordenes vinculadas y rechazar version vacia o duplicada
+        var renameEdit = new ProductFormula
+        {
+            Id = v1.Id, ProductId = v1.ProductId, Name = "Otro Nombre", Version = v1.Version,
+            BaseYieldQuantity = v1.BaseYieldQuantity, StandardLossMarginPercent = v1.StandardLossMarginPercent,
+            OverheadCostPerBatch = v1.OverheadCostPerBatch, Items = v1.Items
+        };
+        Func<Task> renameAct = () => formulaService.UpdateAsync(renameEdit);
+        await renameAct.Should().ThrowAsync<InvalidOperationException>();
+
+        Func<Task> dupVerAct = () => formulaService.CreateAsync(new ProductFormula
+        {
+            ProductId = product.Id, Name = "Duplicada", Version = "1.1", BaseYieldQuantity = 10,
+            Items = [new() { RawMaterialId = mat.Id, QuantityRequired = 100m, UnitOfMeasure = UnitOfMeasure.Milliliter }]
+        });
+        await dupVerAct.Should().ThrowAsync<InvalidOperationException>();
+
+        Func<Task> emptyVerAct = () => formulaService.CreateAsync(new ProductFormula
+        {
+            ProductId = product.Id, Name = "Sin Version", Version = "   ", BaseYieldQuantity = 10,
+            Items = [new() { RawMaterialId = mat.Id, QuantityRequired = 100m, UnitOfMeasure = UnitOfMeasure.Milliliter }]
+        });
+        await emptyVerAct.Should().ThrowAsync<ArgumentException>();
     }
 }

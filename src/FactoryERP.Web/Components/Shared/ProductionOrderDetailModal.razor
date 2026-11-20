@@ -22,10 +22,10 @@
                     </div>
 
                     <div class="row g-2 mb-3">
-                        <div class="col-6 col-md-3"><strong>Planificada:</strong> @Order.PlannedDate.ToLocalTime().ToString("dd/MM/yyyy")</div>
+                        <div class="col-6 col-md-3"><strong>Planificada:</strong> @Order.PlannedDate.ToString("dd/MM/yyyy")</div>
                         <div class="col-6 col-md-3"><strong>Inicio:</strong> @(Order.StartedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
                         <div class="col-6 col-md-3"><strong>Cierre:</strong> @(Order.CompletedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
-                        <div class="col-6 col-md-3"><strong>Vencimiento:</strong> @(Order.ExpirationDate?.ToLocalTime().ToString("dd/MM/yyyy") ?? "-")</div>
+                        <div class="col-6 col-md-3"><strong>Vencimiento:</strong> @(Order.ExpirationDate?.ToString("dd/MM/yyyy") ?? "-")</div>
                     </div>
 
                     @if (!string.IsNullOrWhiteSpace(Order.Notes))

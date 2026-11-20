@@ -13,6 +13,8 @@ internal static class ProductionExecutionHelper
     {
         if (order.Status != ProductionOrderStatus.Draft)
             throw new InvalidOperationException("Solo las órdenes en borrador pueden iniciarse.");
+        if (order.ProductFormula is { IsActive: false })
+            throw new InvalidOperationException($"La fórmula '{order.ProductFormula.Name}' está inactiva y no puede iniciarse.");
 
         var matIds = order.Materials.Select(m => m.RawMaterialId).OrderBy(id => id).ToList();
         var materials = await context.RawMaterials.Where(m => matIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id);
@@ -22,6 +24,8 @@ internal static class ProductionExecutionHelper
         {
             if (!materials.TryGetValue(item.RawMaterialId, out var mat))
                 throw new InvalidOperationException($"Materia prima ID {item.RawMaterialId} no encontrada.");
+            if (!mat.IsActive)
+                throw new InvalidOperationException($"La materia prima '{mat.Name}' ({mat.Sku}) está inactiva y no puede iniciarse.");
             if (mat.CurrentStock < item.PlannedQuantity)
                 throw new InvalidOperationException(
                     $"Stock insuficiente de '{mat.Name}'. Requerido: {item.PlannedQuantity:N2}, Disponible: {mat.CurrentStock:N2}.");
@@ -67,7 +71,7 @@ internal static class ProductionExecutionHelper
         order.CapitalizedInventoryCost = costResult.CapitalizedInventoryCost;
         order.ActualUnitCost = costResult.ActualUnitCost;
         order.ExpirationDate = request.ExpirationDate ?? order.ExpirationDate;
-        if (!string.IsNullOrWhiteSpace(request.Notes)) order.Notes = request.Notes.Trim();
+        if (!string.IsNullOrWhiteSpace(request.Notes)) order.Notes = ProductionPlannerHelper.TruncateNotes(request.Notes);
         order.Status = ProductionOrderStatus.Completed;
         order.CompletedAt = DateTime.UtcNow;
 
@@ -113,6 +117,8 @@ internal static class ProductionExecutionHelper
             {
                 if (!materials.TryGetValue(item.RawMaterialId, out var mat))
                     throw new InvalidOperationException($"Materia prima ID {item.RawMaterialId} no encontrada.");
+                if (deltaQty > 0m && !mat.IsActive)
+                    throw new InvalidOperationException($"La materia prima '{mat.Name}' ({mat.Sku}) está inactiva y no admite consumo adicional.");
                 if (deltaQty > 0m && mat.CurrentStock < deltaQty)
                     throw new InvalidOperationException(
                         $"Stock insuficiente de '{mat.Name}' para consumo adicional. Faltante: {deltaQty:N2}, Disponible: {mat.CurrentStock:N2}.");
@@ -147,7 +153,7 @@ internal static class ProductionExecutionHelper
 
         order.Status = ProductionOrderStatus.Cancelled;
         if (!string.IsNullOrWhiteSpace(reason))
-            order.Notes = $"{order.Notes} [Cancelada: {reason.Trim()}]".Trim();
+            order.Notes = ProductionPlannerHelper.TruncateNotes($"{order.Notes} [Cancelada: {reason.Trim()}]");
 
         return hadWip;
     }

@@ -348,4 +348,43 @@ public class ProductionOrderServiceTests
         Func<Task> inactiveFormulaSim = () => prodService.SimulateAsync(formula.Id, 10);
         await inactiveFormulaSim.Should().ThrowAsync<InvalidOperationException>();
     }
+
+    [Fact]
+    public async Task StartAndExtraConsumption_RejectInactiveFormulaOrMaterial_WhileAllowingReturn()
+    {
+        using var factory = DbContextSqliteFactory.Create();
+        var (_, formula, baseMat, bottleMat, prodService, matSvc, _, _) = await SetupAsync(factory, baseStockKg: 20m, bottleStock: 50m);
+        var formulaSvc = new FormulaService(factory);
+
+        var draft = await prodService.CreateDraftAsync(new CreateProductionOrderRequest(
+            formula.Id, 10, 0m, null, null, "LOT-INACT-1"));
+
+        formula.IsActive = false;
+        await formulaSvc.UpdateAsync(formula);
+        Func<Task> startInactiveFormula = () => prodService.StartProductionAsync(draft.Id);
+        await startInactiveFormula.Should().ThrowAsync<InvalidOperationException>();
+
+        formula.IsActive = true;
+        await formulaSvc.UpdateAsync(formula);
+        baseMat.IsActive = false;
+        await matSvc.UpdateAsync(baseMat);
+        Func<Task> startInactiveMat = () => prodService.StartProductionAsync(draft.Id);
+        await startInactiveMat.Should().ThrowAsync<InvalidOperationException>();
+
+        baseMat.IsActive = true;
+        await matSvc.UpdateAsync(baseMat);
+        await prodService.StartProductionAsync(draft.Id);
+
+        baseMat.IsActive = false;
+        await matSvc.UpdateAsync(baseMat);
+        Func<Task> extraOnInactive = () => prodService.CompleteProductionAsync(new CompleteProductionRequest(
+            draft.Id, 10, 200m, null, null, new Dictionary<int, decimal> { [baseMat.Id] = 5m }));
+        await extraOnInactive.Should().ThrowAsync<InvalidOperationException>();
+
+        // Devolver material sobrante de un material inactivo si esta permitido
+        var completed = await prodService.CompleteProductionAsync(new CompleteProductionRequest(
+            draft.Id, 10, 200m, null, null, new Dictionary<int, decimal> { [baseMat.Id] = 3.5m, [bottleMat.Id] = 10m }));
+        completed.Status.Should().Be(ProductionOrderStatus.Completed);
+        (await matSvc.GetByIdAsync(baseMat.Id))!.CurrentStock.Should().Be(16.5m);
+    }
 }

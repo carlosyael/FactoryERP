@@ -43,7 +43,7 @@
                         <td class="fw-semibold">@b.Product?.Name</td>
                         <td>@b.ProductionDate.ToLocalTime().ToString("dd/MM/yyyy")</td>
                         <td>
-                            @(b.ExpirationDate?.ToLocalTime().ToString("dd/MM/yyyy") ?? "N/A")
+                            @(b.ExpirationDate?.ToString("dd/MM/yyyy") ?? "N/A")
                             @if (b.QuantityRemaining > 0 && b.ExpirationDate.HasValue)
                             {
                                 var expDate = b.ExpirationDate.Value.Date;

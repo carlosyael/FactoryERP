@@ -24,6 +24,8 @@ public partial class ProductionOrders
     private string _search = string.Empty;
     private string _statusFilter = string.Empty;
     private ProductionOrder? _detailOrder;
+    private ProductFormula? _editingInactiveFormula;
+    private string _editingInactiveProductName = string.Empty;
     private ProductionSimulationDto? _simulation;
     private bool _showCreate, _showComplete;
     private int _editingOrderId, _selectedFormulaId, _plannedQuantity = 10, _actualYield;
@@ -50,14 +52,21 @@ public partial class ProductionOrders
 
     private async Task OpenCreateModal()
     {
+        _editingInactiveFormula = null;
+        _editingInactiveProductName = string.Empty;
         var first = _formulas.FirstOrDefault();
         await InitDraftModalAsync(0, "", first?.Id ?? 0, first?.BaseYieldQuantity ?? 10,
             first?.StandardLossMarginPercent ?? _defaultLossMargin, "", DateTime.Today, DateTime.Today.AddMonths(18), "");
     }
 
-    private Task OpenEditDraftModal(ProductionOrder o) => InitDraftModalAsync(
-        o.Id, o.OrderNumber, o.ProductFormulaId, o.PlannedQuantity, o.ExpectedLossMarginPercent, o.BatchCode,
-        o.PlannedDate.ToLocalTime().Date, (o.ExpirationDate ?? o.PlannedDate.AddMonths(18)).ToLocalTime().Date, o.Notes);
+    private Task OpenEditDraftModal(ProductionOrder o)
+    {
+        _editingInactiveFormula = _formulas.All(f => f.Id != o.ProductFormulaId) ? o.ProductFormula : null;
+        _editingInactiveProductName = o.Product?.Name ?? string.Empty;
+        return InitDraftModalAsync(
+            o.Id, o.OrderNumber, o.ProductFormulaId, o.PlannedQuantity, o.ExpectedLossMarginPercent, o.BatchCode,
+            o.PlannedDate.Date, (o.ExpirationDate ?? o.PlannedDate.AddMonths(18)).Date, o.Notes);
+    }
 
     private async Task InitDraftModalAsync(int id, string num, int formulaId, int qty, decimal? loss, string batch, DateTime planned, DateTime exp, string notes)
     {
@@ -78,6 +87,7 @@ public partial class ProductionOrders
 
     private async Task SimulateAsync()
     {
+        if (_selectedFormulaId <= 0 || _plannedQuantity <= 0) { _simulation = null; return; }
         try { _simulation = await ProductionOrderService.SimulateAsync(_selectedFormulaId, _plannedQuantity, _lossMargin); }
         catch (Exception ex) { _simulation = null; await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
     }
@@ -116,7 +126,7 @@ public partial class ProductionOrders
     private void OpenCompleteModal(ProductionOrder o)
     {
         _completeTarget = o; _actualYield = o.ExpectedResultingQuantity; _actualOverhead = o.ActualOverheadCost;
-        _expirationDate = (o.ExpirationDate ?? DateTime.Today.AddMonths(18)).ToLocalTime().Date;
+        _expirationDate = (o.ExpirationDate ?? DateTime.Today.AddMonths(18)).Date;
         _completionNotes = o.Notes;
         _completeLines = o.Materials.Select(m => new MaterialConsumptionInput(
             m.RawMaterialId, m.RawMaterial?.Name ?? $"Material #{m.RawMaterialId}",

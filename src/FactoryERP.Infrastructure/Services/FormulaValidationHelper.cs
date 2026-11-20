@@ -10,6 +10,7 @@ internal static class FormulaValidationHelper
     public static bool HasStructuralChanges(ProductFormula existing, ProductFormula updated)
     {
         if (existing.ProductId != updated.ProductId
+            || !string.Equals(existing.Name.Trim(), (updated.Name ?? string.Empty).Trim(), StringComparison.Ordinal)
             || !string.Equals(existing.Version.Trim(), (updated.Version ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase)
             || existing.BaseYieldQuantity != updated.BaseYieldQuantity
             || existing.StandardLossMarginPercent != updated.StandardLossMarginPercent
@@ -50,6 +51,8 @@ internal static class FormulaValidationHelper
     {
         if (string.IsNullOrWhiteSpace(formula.Name))
             throw new ArgumentException("El nombre de la fórmula es obligatorio.");
+        if (string.IsNullOrWhiteSpace(formula.Version))
+            throw new ArgumentException("La versión de la fórmula es obligatoria.");
         if (formula.BaseYieldQuantity <= 0)
             throw new ArgumentException("El rendimiento base debe ser mayor a cero.");
         if (formula.StandardLossMarginPercent < 0m || formula.StandardLossMarginPercent >= 100m)
@@ -60,6 +63,15 @@ internal static class FormulaValidationHelper
             throw new InvalidOperationException("La fórmula debe contener al menos una materia prima.");
         if (!await context.Products.AnyAsync(p => p.Id == formula.ProductId))
             throw new InvalidOperationException("Producto terminado no encontrado.");
+
+        string normalizedVersion = formula.Version.Trim();
+        var existingVersions = await context.ProductFormulas
+            .Where(f => f.ProductId == formula.ProductId && f.Id != formula.Id)
+            .Select(f => f.Version)
+            .ToListAsync();
+        if (existingVersions.Any(v => string.Equals(v.Trim(), normalizedVersion, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException($"Ya existe la versión '{normalizedVersion}' para este producto.");
+
         if (formula.Items.GroupBy(i => i.RawMaterialId).Any(g => g.Count() > 1))
             throw new InvalidOperationException("La fórmula no debe repetir la misma materia prima.");
 

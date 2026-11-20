@@ -41,7 +41,7 @@ public partial class Formulas
         _currencySymbol = string.IsNullOrWhiteSpace(profile.CurrencySymbol) ? "RD$" : profile.CurrencySymbol;
         _defaultLossMargin = profile.DefaultLossMarginPercent;
         _products = await ProductService.GetAllAsync();
-        _materials = await RawMaterialService.GetAllAsync();
+        _materials = await RawMaterialService.GetAllAsync(includeInactive: true);
         await LoadFormulasAsync();
     }
 
@@ -62,6 +62,7 @@ public partial class Formulas
 
     private void OpenNewModal()
     {
+        var defaultMat = _materials.FirstOrDefault(m => m.IsActive) ?? _materials.FirstOrDefault();
         _editing = new ProductFormula
         {
             ProductId = _products.FirstOrDefault()?.Id ?? 0,
@@ -69,7 +70,7 @@ public partial class Formulas
             BaseYieldQuantity = 10,
             StandardLossMarginPercent = _defaultLossMargin
         };
-        _items = _materials.Count > 0 ? [new() { RawMaterialId = _materials[0].Id, QuantityRequired = 100m, UnitOfMeasure = _materials[0].UnitOfMeasure }] : [];
+        _items = defaultMat != null ? [new() { RawMaterialId = defaultMat.Id, QuantityRequired = 100m, UnitOfMeasure = defaultMat.UnitOfMeasure }] : [];
         _showModal = true;
     }
 
@@ -101,8 +102,9 @@ public partial class Formulas
 
     private void AddItem()
     {
-        if (_materials.Count > 0)
-            _items.Add(new() { RawMaterialId = _materials[0].Id, QuantityRequired = 10m, UnitOfMeasure = _materials[0].UnitOfMeasure });
+        var defaultMat = _materials.FirstOrDefault(m => m.IsActive) ?? _materials.FirstOrDefault();
+        if (defaultMat != null)
+            _items.Add(new() { RawMaterialId = defaultMat.Id, QuantityRequired = 10m, UnitOfMeasure = defaultMat.UnitOfMeasure });
     }
 
     private void OnMaterialSelected(EditableFormulaItem item, ChangeEventArgs e)

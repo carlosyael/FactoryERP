@@ -103,7 +103,7 @@
                     <div class="row g-2 mb-2 align-items-center">
                         <div class="col-md-6">
                             <select class="form-select form-select-sm" value="@item.RawMaterialId" @onchange="e => OnMaterialSelected(item, e)">
-                                @foreach (var m in _materials) { <option value="@m.Id">@m.Name (Stock: @m.CurrentStock.ToString("N2") @UnitConverter.GetShortLabel(m.UnitOfMeasure))</option> }
+                                @foreach (var m in _materials) { <option value="@m.Id">@m.Name@(!m.IsActive ? " (Inactivo)" : "") (Stock: @m.CurrentStock.ToString("N2") @UnitConverter.GetShortLabel(m.UnitOfMeasure))</option> }
                             </select>
                         </div>
                         <div class="col-md-2"><input type="number" step="0.01" class="form-control form-control-sm" @bind="item.QuantityRequired" /></div>

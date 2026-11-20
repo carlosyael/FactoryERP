@@ -115,7 +115,9 @@ public sealed class ProductionOrderService : IProductionOrderService
             await using (var context = await _contextFactory.CreateDbContextAsync())
             {
                 using var tx = await context.Database.BeginTransactionAsync();
-                order = await context.ProductionOrders.Include(o => o.Materials)
+                order = await context.ProductionOrders
+                    .Include(o => o.ProductFormula)
+                    .Include(o => o.Materials)
                     .FirstOrDefaultAsync(o => o.Id == orderId)
                     ?? throw new InvalidOperationException("Orden de producción no encontrada.");
 
@@ -173,7 +175,9 @@ public sealed class ProductionOrderService : IProductionOrderService
             await using (var context = await _contextFactory.CreateDbContextAsync())
             {
                 using var tx = await context.Database.BeginTransactionAsync();
-                order = await context.ProductionOrders.Include(o => o.Materials)
+                order = await context.ProductionOrders
+                    .Include(o => o.ProductFormula)
+                    .Include(o => o.Materials)
                     .FirstOrDefaultAsync(o => o.Id == orderId)
                     ?? throw new InvalidOperationException("Orden de producción no encontrada.");
 

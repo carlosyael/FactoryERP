@@ -77,11 +77,15 @@
                     <div class="col-md-5">
                         <label class="form-label small">Fórmula</label>
                         <select class="form-select" @bind="_selectedFormulaId" @bind:after="OnFormulaChangedAsync">
+                            @if (_editingInactiveFormula != null)
+                            {
+                                <option value="@_editingInactiveFormula.Id">@_editingInactiveProductName - @_editingInactiveFormula.Name (v@(_editingInactiveFormula.Version)) (Inactiva)</option>
+                            }
                             @foreach (var f in _formulas) { <option value="@f.Id">@f.Product?.Name - @f.Name (v@(f.Version))</option> }
                         </select>
                     </div>
-                    <div class="col-md-3"><label class="form-label small">Cant. a Producir</label><input type="number" class="form-control" @bind="_plannedQuantity" /></div>
-                    <div class="col-md-2"><label class="form-label small">Merma (%)</label><input type="number" step="0.5" class="form-control" @bind="_lossMargin" /></div>
+                    <div class="col-md-3"><label class="form-label small">Cant. a Producir</label><input type="number" class="form-control" @bind="_plannedQuantity" @bind:after="SimulateAsync" /></div>
+                    <div class="col-md-2"><label class="form-label small">Merma (%)</label><input type="number" step="0.5" class="form-control" @bind="_lossMargin" @bind:after="SimulateAsync" /></div>
                     <div class="col-md-2 d-flex align-items-end"><button class="btn btn-outline-primary w-100" @onclick="SimulateAsync">Simular</button></div>
                 </div>
                 @if (_simulation != null)
