@@ -851,6 +851,50 @@ namespace FactoryERP.Infrastructure.Migrations
                     b.ToTable("ProductFormulas");
                 });
 
+            modelBuilder.Entity("FactoryERP.Core.Entities.ProductionMaterialBatchAllocation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ProductionOrderId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("QuantityAllocated")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("RawMaterialBatchId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RawMaterialId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RawMaterialBatchId");
+
+                    b.HasIndex("RawMaterialId");
+
+                    b.HasIndex("ProductionOrderId", "RawMaterialBatchId");
+
+                    b.ToTable("ProductionMaterialBatchAllocations");
+                });
+
             modelBuilder.Entity("FactoryERP.Core.Entities.ProductionOrder", b =>
                 {
                     b.Property<int>("Id")
@@ -1206,6 +1250,71 @@ namespace FactoryERP.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("RawMaterials");
+                });
+
+            modelBuilder.Entity("FactoryERP.Core.Entities.RawMaterialBatch", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BatchCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ExpirationDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("InitialQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int?>("PurchaseOrderId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("QuantityRemaining")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("RawMaterialId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ReceivedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BatchCode");
+
+                    b.HasIndex("PurchaseOrderId");
+
+                    b.HasIndex("RawMaterialId", "ExpirationDate");
+
+                    b.ToTable("RawMaterialBatches");
                 });
 
             modelBuilder.Entity("FactoryERP.Core.Entities.Sale", b =>
@@ -1779,6 +1888,33 @@ namespace FactoryERP.Infrastructure.Migrations
                     b.Navigation("Product");
                 });
 
+            modelBuilder.Entity("FactoryERP.Core.Entities.ProductionMaterialBatchAllocation", b =>
+                {
+                    b.HasOne("FactoryERP.Core.Entities.ProductionOrder", "ProductionOrder")
+                        .WithMany("BatchAllocations")
+                        .HasForeignKey("ProductionOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("FactoryERP.Core.Entities.RawMaterialBatch", "RawMaterialBatch")
+                        .WithMany()
+                        .HasForeignKey("RawMaterialBatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FactoryERP.Core.Entities.RawMaterial", "RawMaterial")
+                        .WithMany()
+                        .HasForeignKey("RawMaterialId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ProductionOrder");
+
+                    b.Navigation("RawMaterial");
+
+                    b.Navigation("RawMaterialBatch");
+                });
+
             modelBuilder.Entity("FactoryERP.Core.Entities.ProductionOrder", b =>
                 {
                     b.HasOne("FactoryERP.Core.Entities.ProductFormula", "ProductFormula")
@@ -1835,6 +1971,24 @@ namespace FactoryERP.Infrastructure.Migrations
                         .HasForeignKey("PurchaseOrderId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("FactoryERP.Core.Entities.RawMaterial", "RawMaterial")
+                        .WithMany()
+                        .HasForeignKey("RawMaterialId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PurchaseOrder");
+
+                    b.Navigation("RawMaterial");
+                });
+
+            modelBuilder.Entity("FactoryERP.Core.Entities.RawMaterialBatch", b =>
+                {
+                    b.HasOne("FactoryERP.Core.Entities.PurchaseOrder", "PurchaseOrder")
+                        .WithMany()
+                        .HasForeignKey("PurchaseOrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("FactoryERP.Core.Entities.RawMaterial", "RawMaterial")
                         .WithMany()
@@ -1972,6 +2126,8 @@ namespace FactoryERP.Infrastructure.Migrations
 
             modelBuilder.Entity("FactoryERP.Core.Entities.ProductionOrder", b =>
                 {
+                    b.Navigation("BatchAllocations");
+
                     b.Navigation("Materials");
                 });
 

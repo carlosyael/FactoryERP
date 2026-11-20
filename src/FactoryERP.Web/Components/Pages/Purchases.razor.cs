@@ -18,6 +18,7 @@ public partial class Purchases
     private List<PurchaseOrder> _orders = new();
     private List<Supplier> _suppliers = new();
     private List<RawMaterial> _materials = new();
+    private string _currencySymbol = "RD$";
     private decimal _taxRate = 0.18m;
     private bool _showModal;
     private int _supplierId;
@@ -28,6 +29,7 @@ public partial class Purchases
     protected override async Task OnInitializedAsync()
     {
         var profile = await BusinessProfileService.GetProfileAsync();
+        _currencySymbol = string.IsNullOrWhiteSpace(profile.CurrencySymbol) ? "RD$" : profile.CurrencySymbol;
         _taxRate = profile.DefaultTaxRate;
         _orders = await PurchaseOrderService.GetAllAsync();
         _suppliers = await SupplierService.GetAllAsync();
@@ -74,12 +76,13 @@ public partial class Purchases
         {
             var req = new ReceivePurchaseRequest(
                 _supplierId, _paymentMethod, DateTime.UtcNow, _notes,
-                _lines.Select(l => new CreatePurchaseOrderItemRequest(l.RawMaterialId, l.Quantity, l.UnitCost, l.IsTaxable)).ToList());
+                _lines.Select(l => new CreatePurchaseOrderItemRequest(
+                    l.RawMaterialId, l.Quantity, l.UnitCost, l.IsTaxable, l.BatchCode, l.ExpirationDate)).ToList());
             await PurchaseOrderService.ReceivePurchaseAsync(req);
             _showModal = false;
             _orders = await PurchaseOrderService.GetAllAsync();
             _materials = await RawMaterialService.GetAllAsync();
-            await Swal.FireAsync("Compra registrada", "Stock, CPP y asiento contable actualizados.", SweetAlertIcon.Success);
+            await Swal.FireAsync("Compra registrada", "Stock, lotes MP, CPP y asiento contable actualizados.", SweetAlertIcon.Success);
         }
         catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
     }
@@ -90,5 +93,7 @@ public partial class Purchases
         public decimal Quantity { get; set; }
         public decimal UnitCost { get; set; }
         public bool IsTaxable { get; set; } = true;
+        public string? BatchCode { get; set; }
+        public DateTime? ExpirationDate { get; set; }
     }
 }

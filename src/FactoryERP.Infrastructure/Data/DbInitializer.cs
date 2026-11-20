@@ -145,6 +145,7 @@ public static class DbInitializer
         var menus = new List<AppMenu>
         {
             new() { Title = "Materias Primas", Url = "raw-materials", Icon = "bi-droplet-half", MenuGroup = "Producción", RequiredPermission = Permissions.RawMaterialsView, DisplayOrder = 10 },
+            new() { Title = "Lotes de Materias Primas", Url = "raw-material-batches", Icon = "bi-layers", MenuGroup = "Producción", RequiredPermission = Permissions.RawMaterialsView, DisplayOrder = 15 },
             new() { Title = "Fórmulas y Recetas", Url = "formulas", Icon = "bi-eyedropper", MenuGroup = "Producción", RequiredPermission = Permissions.FormulasManage, DisplayOrder = 20 },
             new() { Title = "Órdenes de Producción", Url = "production", Icon = "bi-gear-wide-connected", MenuGroup = "Producción", RequiredPermission = Permissions.ProductionManage, DisplayOrder = 30 },
             new() { Title = "Lotes Terminados", Url = "batches", Icon = "bi-boxes", MenuGroup = "Producción", RequiredPermission = Permissions.ProductionManage, DisplayOrder = 40 },

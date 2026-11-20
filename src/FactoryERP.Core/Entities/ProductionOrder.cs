@@ -51,4 +51,5 @@ public class ProductionOrder : BaseEntity
     public string Notes { get; set; } = string.Empty;
 
     public List<ProductionOrderMaterial> Materials { get; set; } = new();
+    public List<ProductionMaterialBatchAllocation> BatchAllocations { get; set; } = new();
 }

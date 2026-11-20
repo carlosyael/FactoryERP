@@ -15,7 +15,8 @@ internal static class InventoryKardexRecorder
         string reference,
         string notes = "",
         string? performedBy = null,
-        DateTime? movementDate = null)
+        DateTime? movementDate = null,
+        string? batchCode = null)
     {
         decimal roundedDelta = Math.Round(quantityDelta, 4, MidpointRounding.AwayFromZero);
         decimal roundedUnitCost = Math.Round(Math.Max(0m, unitCost), 4, MidpointRounding.AwayFromZero);
@@ -27,6 +28,7 @@ internal static class InventoryKardexRecorder
             ItemType = InventoryItemType.RawMaterial,
             MovementType = movementType,
             RawMaterialId = material.Id,
+            BatchCode = ProductionPlannerHelper.TruncateNotes(batchCode, 40),
             Reference = ProductionPlannerHelper.TruncateNotes(reference, 60),
             QuantityDelta = roundedDelta,
             BalanceAfter = Math.Round(material.CurrentStock, 4, MidpointRounding.AwayFromZero),

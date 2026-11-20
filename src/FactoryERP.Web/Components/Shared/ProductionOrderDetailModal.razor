@@ -71,6 +71,32 @@
                         </table>
                     </div>
 
+                    @if (Order.BatchAllocations.Any(a => a.QuantityAllocated > 0m))
+                    {
+                        <h6 class="fw-bold mb-2">Trazabilidad de Lotes de Insumos</h6>
+                        <div class="table-responsive mb-3">
+                            <table class="table table-sm table-bordered mb-0">
+                                <thead class="table-light">
+                                    <tr><th>Lote Insumo</th><th>Material</th><th>Vencimiento</th><th class="text-end">Consumido</th></tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var alloc in Order.BatchAllocations.Where(a => a.QuantityAllocated > 0m))
+                                    {
+                                        string unit = alloc.RawMaterialBatch?.RawMaterial != null
+                                            ? UnitConverter.GetShortLabel(alloc.RawMaterialBatch.RawMaterial.UnitOfMeasure)
+                                            : "";
+                                        <tr>
+                                            <td><code>@alloc.RawMaterialBatch?.BatchCode</code></td>
+                                            <td>@alloc.RawMaterialBatch?.RawMaterial?.Name</td>
+                                            <td>@(alloc.RawMaterialBatch?.ExpirationDate?.ToString("dd/MM/yyyy") ?? "N/A")</td>
+                                            <td class="text-end">@alloc.QuantityAllocated.ToString("N2") @unit</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+
                     <div class="row g-2 border-top pt-2">
                         <div class="col-md-6">
                             <div><strong>Planificado / Esperado:</strong> @Order.PlannedQuantity / @Order.ExpectedResultingQuantity uds (@Order.ExpectedLossMarginPercent.ToString("N2")%)</div>

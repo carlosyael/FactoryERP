@@ -20,16 +20,16 @@ internal static class ProductionExecutionHelper
         var materials = await context.RawMaterials.Where(m => matIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id);
 
         decimal matCost = 0m;
+        DateTime utcToday = DateTime.UtcNow.Date;
         foreach (var item in order.Materials.OrderBy(m => m.RawMaterialId))
         {
             if (!materials.TryGetValue(item.RawMaterialId, out var mat))
                 throw new InvalidOperationException($"Materia prima ID {item.RawMaterialId} no encontrada.");
             if (!mat.IsActive)
                 throw new InvalidOperationException($"La materia prima '{mat.Name}' ({mat.Sku}) está inactiva y no puede iniciarse.");
-            if (mat.CurrentStock < item.PlannedQuantity)
-                throw new InvalidOperationException(
-                    $"Stock insuficiente de '{mat.Name}'. Requerido: {item.PlannedQuantity:N2}, Disponible: {mat.CurrentStock:N2}.");
 
+            string? batchCode = await RawMaterialBatchAllocator.AllocateFefoAsync(
+                context, order, mat, item.PlannedQuantity, utcToday);
             mat.CurrentStock = Math.Round(mat.CurrentStock - item.PlannedQuantity, 4, MidpointRounding.AwayFromZero);
             item.ActualQuantityUsed = item.PlannedQuantity;
             item.UnitCostAtConsumption = mat.AverageCost;
@@ -37,7 +37,7 @@ internal static class ProductionExecutionHelper
             matCost += item.TotalCost;
             InventoryKardexRecorder.RecordRawMaterial(
                 context, mat, InventoryMovementType.ProductionConsumption, -item.PlannedQuantity, item.UnitCostAtConsumption,
-                order.OrderNumber, $"Inicio lote {order.BatchCode}", performedBy);
+                order.OrderNumber, $"Inicio lote {order.BatchCode}", performedBy, batchCode: batchCode);
         }
 
         order.ActualMaterialCost = matCost;
@@ -114,6 +114,7 @@ internal static class ProductionExecutionHelper
     {
         var matIds = order.Materials.Select(m => m.RawMaterialId).Distinct().ToList();
         var materials = await context.RawMaterials.Where(m => matIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id);
+        DateTime utcToday = DateTime.UtcNow.Date;
 
         foreach (var item in order.Materials.OrderBy(m => m.RawMaterialId))
         {
@@ -128,9 +129,10 @@ internal static class ProductionExecutionHelper
                     throw new InvalidOperationException($"Materia prima ID {item.RawMaterialId} no encontrada.");
                 if (deltaQty > 0m && !mat.IsActive)
                     throw new InvalidOperationException($"La materia prima '{mat.Name}' ({mat.Sku}) está inactiva y no admite consumo adicional.");
-                if (deltaQty > 0m && mat.CurrentStock < deltaQty)
-                    throw new InvalidOperationException(
-                        $"Stock insuficiente de '{mat.Name}' para consumo adicional. Faltante: {deltaQty:N2}, Disponible: {mat.CurrentStock:N2}.");
+
+                string? batchCode = deltaQty > 0m
+                    ? await RawMaterialBatchAllocator.AllocateFefoAsync(context, order, mat, deltaQty, utcToday)
+                    : await RawMaterialBatchAllocator.RestoreAllocatedAsync(context, order, mat, Math.Abs(deltaQty));
 
                 mat.CurrentStock = Math.Round(mat.CurrentStock - deltaQty, 4, MidpointRounding.AwayFromZero);
                 item.ActualQuantityUsed = roundedActual;
@@ -139,7 +141,7 @@ internal static class ProductionExecutionHelper
                     context, mat, InventoryMovementType.ProductionMaterialReconciliation, -deltaQty,
                     item.UnitCostAtConsumption, order.OrderNumber,
                     deltaQty > 0m ? $"Consumo adicional lote {order.BatchCode}" : $"Devolución sobrante lote {order.BatchCode}",
-                    performedBy);
+                    performedBy, batchCode: batchCode);
             }
         }
 
@@ -160,13 +162,14 @@ internal static class ProductionExecutionHelper
             {
                 if (!materials.TryGetValue(item.RawMaterialId, out var mat))
                     throw new InvalidOperationException($"Materia prima ID {item.RawMaterialId} no encontrada.");
+                string? batchCode = await RawMaterialBatchAllocator.RestoreAllocatedAsync(context, order, mat, item.ActualQuantityUsed);
                 mat.CurrentStock = Math.Round(
                     mat.CurrentStock + item.ActualQuantityUsed, 4, MidpointRounding.AwayFromZero);
                 InventoryKardexRecorder.RecordRawMaterial(
                     context, mat, InventoryMovementType.ProductionCancellationReturn, item.ActualQuantityUsed,
                     item.UnitCostAtConsumption, order.OrderNumber,
                     string.IsNullOrWhiteSpace(reason) ? $"Cancelación orden {order.OrderNumber}" : reason.Trim(),
-                    performedBy);
+                    performedBy, batchCode: batchCode);
             }
         }
 

@@ -12,7 +12,8 @@ internal static class ProductionPlannerHelper
     public static ProductionSimulationDto BuildSimulation(
         ProductFormula formula,
         int plannedQuantity,
-        decimal lossMarginPercent)
+        decimal lossMarginPercent,
+        IReadOnlyDictionary<int, decimal>? expiredByMaterial = null)
     {
         if (!formula.IsActive)
             throw new InvalidOperationException($"La fórmula '{formula.Name}' está inactiva y no puede usarse.");
@@ -35,8 +36,10 @@ internal static class ProductionPlannerHelper
                 UnitConverter.Convert(item.QuantityRequired * scaleFactor, item.UnitOfMeasure, mat.UnitOfMeasure));
             requiredInMatUnit = Math.Round(requiredInMatUnit, 4, MidpointRounding.AwayFromZero);
 
+            decimal expired = expiredByMaterial != null && expiredByMaterial.TryGetValue(mat.Id, out var exp) ? exp : 0m;
+            decimal usableStock = Math.Max(0m, Math.Round(mat.CurrentStock - expired, 4, MidpointRounding.AwayFromZero));
             decimal estCost = Math.Round(requiredInMatUnit * mat.AverageCost, 2, MidpointRounding.AwayFromZero);
-            bool sufficient = mat.CurrentStock >= requiredInMatUnit;
+            bool sufficient = usableStock >= requiredInMatUnit;
 
             requirements.Add(new ProductionMaterialRequirementDto(
                 mat.Id,
@@ -44,7 +47,7 @@ internal static class ProductionPlannerHelper
                 mat.Name,
                 mat.UnitOfMeasure,
                 requiredInMatUnit,
-                mat.CurrentStock,
+                usableStock,
                 mat.AverageCost,
                 estCost,
                 sufficient));

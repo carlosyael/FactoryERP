@@ -39,6 +39,7 @@ public static class ServiceRegistrationExtensions
         services.AddScoped<IFinancialReportService, FinancialReportService>();
 
         services.AddScoped<IRawMaterialService, RawMaterialService>();
+        services.AddScoped<IRawMaterialBatchService, RawMaterialBatchService>();
         services.AddScoped<ISupplierService, SupplierService>();
         services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
 

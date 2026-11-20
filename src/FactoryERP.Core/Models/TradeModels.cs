@@ -6,7 +6,9 @@ public sealed record CreatePurchaseOrderItemRequest(
     int RawMaterialId,
     decimal Quantity,
     decimal UnitCost,
-    bool IsTaxable = true);
+    bool IsTaxable = true,
+    string? BatchCode = null,
+    DateTime? ExpirationDate = null);
 
 public sealed record ReceivePurchaseRequest(
     int SupplierId,

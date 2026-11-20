@@ -27,22 +27,30 @@ public sealed class ProductionOrderService : IProductionOrderService
         _currentUser = currentUser;
     }
 
+    private static IQueryable<ProductionOrder> HydrateOrders(AppDbContext context) =>
+        context.ProductionOrders.AsNoTracking()
+            .Include(o => o.Product).Include(o => o.ProductFormula)
+            .Include(o => o.Materials).ThenInclude(m => m.RawMaterial)
+            .Include(o => o.BatchAllocations).ThenInclude(a => a.RawMaterialBatch).ThenInclude(b => b!.RawMaterial);
+
+    private static async Task<ProductionOrder> LoadForExecutionAsync(AppDbContext context, int orderId) =>
+        await context.ProductionOrders
+            .Include(o => o.ProductFormula)
+            .Include(o => o.Materials)
+            .Include(o => o.BatchAllocations).ThenInclude(a => a.RawMaterialBatch)
+            .FirstOrDefaultAsync(o => o.Id == orderId)
+            ?? throw new InvalidOperationException("Orden de producción no encontrada.");
+
     public async Task<List<ProductionOrder>> GetAllAsync()
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.ProductionOrders.AsNoTracking()
-            .Include(o => o.Product).Include(o => o.ProductFormula)
-            .Include(o => o.Materials).ThenInclude(m => m.RawMaterial)
-            .OrderByDescending(o => o.Id).ToListAsync();
+        return await HydrateOrders(context).OrderByDescending(o => o.Id).ToListAsync();
     }
 
     public async Task<ProductionOrder?> GetByIdAsync(int id)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
-        return await context.ProductionOrders.AsNoTracking()
-            .Include(o => o.Product).Include(o => o.ProductFormula)
-            .Include(o => o.Materials).ThenInclude(m => m.RawMaterial)
-            .FirstOrDefaultAsync(o => o.Id == id);
+        return await HydrateOrders(context).FirstOrDefaultAsync(o => o.Id == id);
     }
 
     public async Task<ProductionSimulationDto> SimulateAsync(
@@ -55,8 +63,10 @@ public sealed class ProductionOrderService : IProductionOrderService
             .FirstOrDefaultAsync(f => f.Id == formulaId)
             ?? throw new InvalidOperationException("Fórmula no encontrada.");
 
+        var expired = await RawMaterialBatchAllocator.GetExpiredStockByMaterialAsync(
+            context, formula.Items.Select(i => i.RawMaterialId), DateTime.UtcNow.Date);
         decimal loss = overrideLossMarginPercent ?? formula.StandardLossMarginPercent;
-        return ProductionPlannerHelper.BuildSimulation(formula, plannedQuantity, loss);
+        return ProductionPlannerHelper.BuildSimulation(formula, plannedQuantity, loss, expired);
     }
 
     public async Task<ProductionOrder> CreateDraftAsync(CreateProductionOrderRequest request)
@@ -110,11 +120,7 @@ public sealed class ProductionOrderService : IProductionOrderService
             await using (var context = await _contextFactory.CreateDbContextAsync())
             {
                 using var tx = await context.Database.BeginTransactionAsync();
-                order = await context.ProductionOrders
-                    .Include(o => o.ProductFormula)
-                    .Include(o => o.Materials)
-                    .FirstOrDefaultAsync(o => o.Id == orderId)
-                    ?? throw new InvalidOperationException("Orden de producción no encontrada.");
+                order = await LoadForExecutionAsync(context, orderId);
 
                 matCost = await ProductionExecutionHelper.StartOrderAsync(context, order, _currentUser?.UserName);
                 await context.SaveChangesAsync();
@@ -142,9 +148,7 @@ public sealed class ProductionOrderService : IProductionOrderService
             await using (var context = await _contextFactory.CreateDbContextAsync())
             {
                 using var tx = await context.Database.BeginTransactionAsync();
-                order = await context.ProductionOrders.Include(o => o.Materials)
-                    .FirstOrDefaultAsync(o => o.Id == request.ProductionOrderId)
-                    ?? throw new InvalidOperationException("Orden de producción no encontrada.");
+                order = await LoadForExecutionAsync(context, request.ProductionOrderId);
 
                 wipCleared = await ProductionExecutionHelper.CompleteOrderAsync(
                     context, order, request, tolerance, requireQc, _currentUser?.UserName);
@@ -172,11 +176,7 @@ public sealed class ProductionOrderService : IProductionOrderService
             await using (var context = await _contextFactory.CreateDbContextAsync())
             {
                 using var tx = await context.Database.BeginTransactionAsync();
-                order = await context.ProductionOrders
-                    .Include(o => o.ProductFormula)
-                    .Include(o => o.Materials)
-                    .FirstOrDefaultAsync(o => o.Id == orderId)
-                    ?? throw new InvalidOperationException("Orden de producción no encontrada.");
+                order = await LoadForExecutionAsync(context, orderId);
 
                 hadWip = await ProductionExecutionHelper.CancelOrderAsync(context, order, reason, _currentUser?.UserName);
                 await context.SaveChangesAsync();

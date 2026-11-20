@@ -23,6 +23,9 @@
             <input class="form-check-input" type="checkbox" id="rawInactiveSwitch" @bind="_showInactive" />
             <label class="form-check-label small" for="rawInactiveSwitch">Inactivos</label>
         </div>
+        <a class="btn btn-outline-secondary btn-sm" href="/raw-material-batches">
+            <i class="bi bi-layers me-1"></i> Lotes MP
+        </a>
         <AuthorizeView Policy="@Permissions.RawMaterialsManage">
             <Authorized>
                 <button class="btn btn-brand btn-sm" @onclick="OpenNewModal">
@@ -61,6 +64,9 @@
                         <td>@item.MinimumStockLevel.ToString("N2")</td>
                         <td>@_currencySymbol @item.AverageCost.ToString("N4")</td>
                         <td class="text-end text-nowrap">
+                            <a class="btn btn-sm btn-outline-secondary me-1" href="/raw-material-batches?rawMaterialId=@item.Id" title="Ver lotes del insumo">
+                                <i class="bi bi-layers"></i>
+                            </a>
                             <a class="btn btn-sm btn-outline-secondary me-1" href="/kardex?rawMaterialId=@item.Id" title="Ver Kardex">
                                 <i class="bi bi-clock-history"></i>
                             </a>

@@ -76,6 +76,7 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
             decimal subTotal = 0m;
             decimal totalTax = 0m;
             var items = new List<PurchaseOrderItem>();
+            var batches = new List<RawMaterialBatch>();
             string orderNumber = $"OC-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..5].ToUpperInvariant()}";
             DateTime purchaseDate = request.PurchaseDate ?? DateTime.UtcNow;
 
@@ -91,13 +92,20 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
                 decimal lineTax = reqItem.IsTaxable ? Math.Round(lineSub * taxRate, 2, MidpointRounding.AwayFromZero) : 0m;
                 decimal lineTotal = lineSub + lineTax;
 
+                string batchCode = string.IsNullOrWhiteSpace(reqItem.BatchCode)
+                    ? $"LMP-{purchaseDate:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..5].ToUpperInvariant()}"
+                    : ProductionPlannerHelper.TruncateNotes(reqItem.BatchCode.Trim().ToUpperInvariant(), 40);
+                DateTime? expDate = reqItem.ExpirationDate.HasValue
+                    ? DateTime.SpecifyKind(reqItem.ExpirationDate.Value.Date, DateTimeKind.Utc)
+                    : null;
+
                 material.AverageCost = ProductionCostCalculator.CalculateWeightedAverageCost(
                     material.CurrentStock, material.AverageCost, reqItem.Quantity, reqItem.UnitCost);
                 material.LastPurchaseCost = reqItem.UnitCost;
                 material.CurrentStock = Math.Round(material.CurrentStock + reqItem.Quantity, 4, MidpointRounding.AwayFromZero);
                 InventoryKardexRecorder.RecordRawMaterial(
                     context, material, InventoryMovementType.PurchaseReceipt, reqItem.Quantity, reqItem.UnitCost,
-                    orderNumber, $"Compra a {supplier.Name}", _currentUser?.UserName, purchaseDate);
+                    orderNumber, $"Compra a {supplier.Name}", _currentUser?.UserName, purchaseDate, batchCode);
 
                 subTotal += lineSub;
                 totalTax += lineTax;
@@ -110,6 +118,17 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
                     IsTaxable = reqItem.IsTaxable,
                     TaxAmount = lineTax,
                     LineTotal = lineTotal
+                });
+                batches.Add(new RawMaterialBatch
+                {
+                    RawMaterialId = material.Id,
+                    BatchCode = batchCode,
+                    ReceivedDate = purchaseDate,
+                    ExpirationDate = expDate,
+                    InitialQuantity = reqItem.Quantity,
+                    QuantityRemaining = reqItem.Quantity,
+                    UnitCost = reqItem.UnitCost,
+                    Notes = ProductionPlannerHelper.TruncateNotes(request.Notes, 300)
                 });
             }
 
@@ -135,6 +154,11 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
             };
 
             context.PurchaseOrders.Add(order);
+            foreach (var b in batches)
+            {
+                b.PurchaseOrder = order;
+                context.RawMaterialBatches.Add(b);
+            }
             await context.SaveChangesAsync();
             await tx.CommitAsync();
         }

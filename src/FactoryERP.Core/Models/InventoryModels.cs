@@ -1,3 +1,4 @@
+using FactoryERP.Core.Entities;
 using FactoryERP.Core.Enums;
 
 namespace FactoryERP.Core.Models;
@@ -11,3 +12,17 @@ public sealed record InventoryMovementFilter(
     DateTime? EndDate = null,
     string? Search = null,
     int MaxResults = 300);
+
+public sealed record RecallAffectedOrderDto(
+    int ProductionOrderId,
+    string OrderNumber,
+    string OutputBatchCode,
+    string ProductName,
+    ProductionOrderStatus OrderStatus,
+    decimal QuantityConsumed,
+    int? FinishedBatchId,
+    int? FinishedBatchRemaining);
+
+public sealed record RawMaterialBatchRecallDto(
+    RawMaterialBatch Batch,
+    IReadOnlyList<RecallAffectedOrderDto> AffectedOrders);

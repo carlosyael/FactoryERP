@@ -1,0 +1,141 @@
+@page "/raw-material-batches"
+@attribute [Authorize(Policy = Permissions.RawMaterialsView)]
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div>
+        <h3 class="fw-bold mb-0">Lotes y Vencimientos de Materias Primas</h3>
+        <small class="text-muted">Control FEFO de insumos comprados y trazabilidad inversa (Recall)</small>
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <input class="form-control form-control-sm" style="width: 210px;" placeholder="Buscar lote, insumo u OC..." @bind="_search" @bind:event="oninput" />
+        <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="mpBatchesStockSwitch" @bind="_onlyWithStock" />
+            <label class="form-check-label small" for="mpBatchesStockSwitch">Solo con existencia</label>
+        </div>
+        @if (_rawMaterialIdFilter.HasValue)
+        {
+            <button class="btn btn-sm btn-outline-secondary" @onclick="ClearMaterialFilterAsync">Ver todos</button>
+        }
+    </div>
+</div>
+
+@{
+    var utcToday = DateTime.UtcNow.Date;
+    int usableCount = _batches.Count(b => b.IsUsable(utcToday));
+    int expiringSoonCount = _batches.Count(b => b.QuantityRemaining > 0m && b.ExpirationDate.HasValue && b.ExpirationDate.Value.Date >= utcToday && b.ExpirationDate.Value.Date <= utcToday.AddDays(30));
+    int expiredCount = _batches.Count(b => b.QuantityRemaining > 0m && b.IsExpired(utcToday));
+}
+<div class="d-flex flex-wrap gap-2 mb-3 small">
+    <span class="badge bg-success-subtle text-success">Vigentes con stock: @usableCount</span>
+    <span class="badge bg-warning-subtle text-warning-emphasis">Por vencer (&le;30d): @expiringSoonCount</span>
+    <span class="badge bg-danger text-white">Vencidos con stock: @expiredCount</span>
+</div>
+
+<div class="card p-3">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 small">
+            <thead class="table-light">
+                <tr>
+                    <th>Lote</th><th>Materia Prima</th><th>Compra / Suplidor</th><th>Recibido</th><th>Vencimiento</th><th class="text-end">Inicial</th><th class="text-end">Disponible</th><th class="text-end">Costo Unit.</th><th class="text-end">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!FilteredBatches.Any())
+                {
+                    <tr><td colspan="9" class="text-center text-muted py-4">No hay lotes de materias primas registrados para los filtros actuales.</td></tr>
+                }
+                else
+                {
+                    @foreach (var b in FilteredBatches)
+                    {
+                        string unit = b.RawMaterial != null ? UnitConverter.GetShortLabel(b.RawMaterial.UnitOfMeasure) : "ud";
+                        <tr class="@(b.QuantityRemaining == 0m ? "text-muted" : "")">
+                            <td><code>@b.BatchCode</code></td>
+                            <td>
+                                <div class="fw-semibold">@b.RawMaterial?.Name</div>
+                                <div class="text-muted">@b.RawMaterial?.Sku</div>
+                            </td>
+                            <td>
+                                <div>@(b.PurchaseOrder?.OrderNumber ?? "-")</div>
+                                <div class="text-muted">@(b.PurchaseOrder?.Supplier?.Name ?? "")</div>
+                            </td>
+                            <td>@b.ReceivedDate.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                            <td>
+                                @(b.ExpirationDate?.ToString("dd/MM/yyyy") ?? "Sin venc.")
+                                @if (b.QuantityRemaining > 0m && b.ExpirationDate.HasValue)
+                                {
+                                    var expDate = b.ExpirationDate.Value.Date;
+                                    if (expDate < utcToday) { <span class="badge bg-danger ms-1">Vencido</span> }
+                                    else if (expDate <= utcToday.AddDays(30)) { <span class="badge bg-warning text-dark ms-1">Por vencer</span> }
+                                    else { <span class="badge bg-success-subtle text-success ms-1">Vigente</span> }
+                                }
+                            </td>
+                            <td class="text-end">@b.InitialQuantity.ToString("N2") @unit</td>
+                            <td class="text-end fw-bold">@b.QuantityRemaining.ToString("N2") @unit</td>
+                            <td class="text-end">@_currencySymbol @b.UnitCost.ToString("N4")</td>
+                            <td class="text-end text-nowrap">
+                                <a class="btn btn-sm btn-outline-secondary me-1" href="/kardex?search=@Uri.EscapeDataString(b.BatchCode)" title="Ver Kardex">
+                                    <i class="bi bi-clock-history"></i>
+                                </a>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="() => OpenRecallModalAsync(b.Id)">
+                                    Trazabilidad / Recall
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (_recallData != null)
+{
+    string unit = _recallData.Batch.RawMaterial != null ? UnitConverter.GetShortLabel(_recallData.Batch.RawMaterial.UnitOfMeasure) : "ud";
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.45);">
+        <div class="modal-dialog modal-lg"><div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Trazabilidad / Recall: Lote <code>@_recallData.Batch.BatchCode</code></h5>
+                <button type="button" class="btn-close" @onclick="() => _recallData = null"></button>
+            </div>
+            <div class="modal-body small">
+                <div class="alert alert-light border py-2 mb-3">
+                    <strong>Insumo:</strong> @_recallData.Batch.RawMaterial?.Name (@_recallData.Batch.RawMaterial?.Sku) |
+                    <strong>Recibido:</strong> @_recallData.Batch.InitialQuantity.ToString("N2") @unit |
+                    <strong>Disponible:</strong> @_recallData.Batch.QuantityRemaining.ToString("N2") @unit |
+                    <strong>Suplidor:</strong> @(_recallData.Batch.PurchaseOrder?.Supplier?.Name ?? "-")
+                </div>
+                @if (_recallData.AffectedOrders.Count == 0)
+                {
+                    <p class="text-muted mb-0">Este lote de insumo aún no ha sido consumido en ninguna orden de producción.</p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered mb-0">
+                            <thead class="table-light">
+                                <tr><th>Orden</th><th>Producto</th><th>Lote Terminado</th><th>Estado OP</th><th class="text-end">Insumo Usado</th><th class="text-end">Stock Lote PT</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var o in _recallData.AffectedOrders)
+                                {
+                                    <tr>
+                                        <td><code>@o.OrderNumber</code></td>
+                                        <td>@o.ProductName</td>
+                                        <td><code>@o.OutputBatchCode</code></td>
+                                        <td>@o.OrderStatus</td>
+                                        <td class="text-end">@o.QuantityConsumed.ToString("N2") @unit</td>
+                                        <td class="text-end">@(o.FinishedBatchRemaining?.ToString() ?? "-") uds</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-brand btn-sm" @onclick="() => _recallData = null">Cerrar</button>
+            </div>
+        </div></div>
+    </div>
+}

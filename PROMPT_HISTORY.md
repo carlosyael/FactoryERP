@@ -138,6 +138,20 @@
   - `InventoryKardex.razor/.cs`: limpieza automática de filtros de ítem incompatible al cambiar el selector de tipo, chips de filtro activo con `×` y estado vacío en tabla.
 - **Verificación:** `dotnet build --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `113 / 113` pruebas aprobadas (incluyendo `OpeningStockUserAttributionAndConcurrentMutations_PreserveAccurateKardexBalances`), `has-pending-model-changes` sin cambios y máximo `195` líneas en `.cs` propios.
 
+## [2026-11-20] — Bloque C2: Lotes de Materias Primas, Consumo FEFO y Trazabilidad Inversa / Recall (rama `fix/ux-refinements`)
+- **Requerimiento:** Controlar lotes y fechas de vencimiento en materias primas compradas, priorizar consumo FEFO bloqueando lotes vencidos y ofrecer trazabilidad inversa (Recall) desde un lote de insumo hasta las órdenes y lotes terminados afectados.
+- **Cambios en Core, Infraestructura y Migración:**
+  - `RawMaterialBatch.cs`, `ProductionMaterialBatchAllocation.cs`, `ProductionOrder.cs`, `TradeModels.cs`, `InventoryModels.cs`, `IRawMaterialBatchService.cs`: entidades de lote MP y asignaciones por orden, campos opcionales `BatchCode`/`ExpirationDate` en recepción de compras y DTOs de Recall (`RawMaterialBatchRecallDto`, `RecallAffectedOrderDto`).
+  - `AppDbContext.cs` + `AppDbContextConfiguration.cs`, migración EF `20261120192953_AddRawMaterialBatchesAndTraceability.cs`, `DbInitializer.cs`: esquema relacional con precisión `(18,4)` e índices y menú idempotente `"Lotes de Materias Primas"` (`/raw-material-batches`).
+  - `RawMaterialBatchAllocator.cs`, `PurchaseOrderService.cs`, `ProductionPlannerHelper.cs`, `ProductionOrderService.cs`, `ProductionExecutionHelper.cs`, `InventoryKardexRecorder.cs`: generación de `RawMaterialBatch` por compra, descuento automático de stock vencido en simulaciones e inicio de orden, asignación FEFO en consumo inicial/reconciliación y reversión exacta por lote en devoluciones o cancelaciones.
+  - `RawMaterialBatchService.cs`, `ServiceRegistrationExtensions.cs`: consulta filtrable de lotes MP y reporte de Recall inverso hacia órdenes y lotes terminados.
+- **Cambios en UI y Pruebas:**
+  - `Purchases.razor/.cs`: captura opcional de lote y fecha de vencimiento por línea de compra + moneda dinámica.
+  - `ProductionOrderDetailModal.razor`: tabla `"Trazabilidad de Lotes de Insumos"` en la Hoja de Producción.
+  - `RawMaterialBatches.razor/.cs` (`/raw-material-batches`) y `RawMaterials.razor`: contadores (`Vigentes con stock`, `Por vencer <=30d`, `Vencidos con stock`), enlace rápido por insumo y modal `"Trazabilidad / Recall"`.
+  - Nuevo `RawMaterialBatchServiceTests.cs` y actualización de `DbInitializerTests.cs`.
+- **Verificación:** `dotnet build --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `114 / 114` pruebas aprobadas, `has-pending-model-changes` sin cambios, máximo `195` líneas en `.cs` propios y smoke test HTTP autenticado (`200 OK` en `/raw-material-batches`, `/purchases`, `/raw-materials`, `/production`, `/batches`, `/kardex`).
+
 
 
 
