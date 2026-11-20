@@ -100,7 +100,19 @@ jobs:
                     passwordSecretRef: $ref
                   }]
                 },
-                template: ($tpl | .containers[0].image = $img)
+                template: {
+                  containers: [
+                    ($tpl.containers[0] | {
+                      name,
+                      image: $img,
+                      env,
+                      resources: {
+                        cpu: .resources.cpu,
+                        memory: .resources.memory
+                      }
+                    })
+                  ]
+                }
               }
             }' > "$PATCH_FILE"
           az rest --method patch --uri "$APP_URI" --headers "Content-Type=application/json" --body "@${PATCH_FILE}" -o none
