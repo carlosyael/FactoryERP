@@ -39,7 +39,7 @@ public partial class ProductionOrders
     private IEnumerable<ProductionOrder> FilteredOrders => _orders.Where(o =>
         (string.IsNullOrWhiteSpace(_statusFilter) || (Enum.TryParse<ProductionOrderStatus>(_statusFilter, out var st) && o.Status == st)) &&
         (string.IsNullOrWhiteSpace(_search) || o.OrderNumber.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ||
-         o.BatchCode.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) || (o.Product?.Name.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ?? false)));
+         o.BatchCode.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) || o.OutputDisplayName.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)));
 
     protected override async Task OnInitializedAsync()
     {
@@ -62,7 +62,7 @@ public partial class ProductionOrders
     private Task OpenEditDraftModal(ProductionOrder o)
     {
         _editingInactiveFormula = _formulas.All(f => f.Id != o.ProductFormulaId) ? o.ProductFormula : null;
-        _editingInactiveProductName = o.Product?.Name ?? string.Empty;
+        _editingInactiveProductName = o.OutputDisplayName;
         return InitDraftModalAsync(
             o.Id, o.OrderNumber, o.ProductFormulaId, o.PlannedQuantity, o.ExpectedLossMarginPercent, o.BatchCode,
             o.PlannedDate.Date, (o.ExpirationDate ?? o.PlannedDate.AddMonths(18)).Date, o.Notes);
@@ -144,9 +144,10 @@ public partial class ProductionOrders
             var actualMats = _completeLines.ToDictionary(l => l.RawMaterialId, l => l.ActualQty);
             var expirationUtc = DateTime.SpecifyKind(_expirationDate.Date, DateTimeKind.Utc);
             await ProductionOrderService.CompleteProductionAsync(new(_completeTarget.Id, _actualYield, _actualOverhead, expirationUtc, _completionNotes, actualMats));
+            bool isBulk = _completeTarget.IsSemiFinishedOutput;
             _showComplete = false;
             _orders = await ProductionOrderService.GetAllAsync();
-            await Swal.FireAsync("Lote completado", "Producto terminado ingresado al catálogo y contabilizado.", SweetAlertIcon.Success);
+            await Swal.FireAsync("Lote completado", isBulk ? "Semielaborado/granel ingresado al inventario de insumos y contabilizado." : "Producto terminado ingresado al catálogo y contabilizado.", SweetAlertIcon.Success);
         }
         catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }
         finally { LoadingService.Hide(); }

@@ -21,7 +21,10 @@ public sealed record RecallAffectedOrderDto(
     ProductionOrderStatus OrderStatus,
     decimal QuantityConsumed,
     int? FinishedBatchId,
-    int? FinishedBatchRemaining);
+    int? FinishedBatchRemaining,
+    bool IsSemiFinishedOutput = false,
+    string? ViaBulkBatchCode = null,
+    string? ConsumedUnit = null);
 
 public sealed record RawMaterialBatchRecallDto(
     RawMaterialBatch Batch,
@@ -31,3 +34,19 @@ public sealed record AdjustRawMaterialBatchRequest(
     int BatchId,
     decimal NewQuantity,
     string Reason);
+
+public sealed record MaterialPlanningSuggestionDto(
+    int RawMaterialId,
+    string Sku,
+    string Name,
+    UnitOfMeasure UnitOfMeasure,
+    decimal PhysicalStock,
+    decimal ExpiredStock,
+    decimal UsableStock,
+    decimal ReservedByDrafts,
+    decimal NetAvailableStock,
+    decimal MinimumStockLevel,
+    decimal SuggestedPurchaseQuantity,
+    decimal ReferenceUnitCost,
+    decimal EstimatedPurchaseSubTotal,
+    bool IsManufacturedInHouse = false);

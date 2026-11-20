@@ -11,8 +11,14 @@ public class ProductionOrder : BaseEntity
     [Required, StringLength(40)]
     public string OrderNumber { get; set; } = string.Empty;
 
-    public int ProductId { get; set; }
+    public int? ProductId { get; set; }
     public Product? Product { get; set; }
+
+    public int? OutputRawMaterialId { get; set; }
+    public RawMaterial? OutputRawMaterial { get; set; }
+
+    public bool IsSemiFinishedOutput => OutputRawMaterialId.HasValue;
+    public string OutputDisplayName => OutputRawMaterial?.Name ?? Product?.Name ?? string.Empty;
 
     public int ProductFormulaId { get; set; }
     public ProductFormula? ProductFormula { get; set; }

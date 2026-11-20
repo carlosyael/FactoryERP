@@ -7,8 +7,14 @@ namespace FactoryERP.Core.Entities;
 /// </summary>
 public class ProductFormula : BaseEntity
 {
-    public int ProductId { get; set; }
+    public int? ProductId { get; set; }
     public Product? Product { get; set; }
+
+    public int? OutputRawMaterialId { get; set; }
+    public RawMaterial? OutputRawMaterial { get; set; }
+
+    public bool IsSemiFinishedOutput => OutputRawMaterialId.HasValue;
+    public string OutputDisplayName => OutputRawMaterial?.Name ?? Product?.Name ?? string.Empty;
 
     [Required(ErrorMessage = "El nombre de la fórmula es obligatorio.")]
     [StringLength(150)]

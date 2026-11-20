@@ -161,3 +161,17 @@
   - `RawMaterialBatchServiceTests.cs`, `PurchaseOrderServiceTests.cs`: pruebas de baja de lote vencido, sincronización de ajuste descendente, Kardex multi-lote y rechazo de compras con suplidor/insumo inactivo.
 - **Verificación:** `dotnet build --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `116 / 116` pruebas aprobadas, `has-pending-model-changes --configuration Release` sin cambios y máximo `195` líneas en `.cs` propios.
 
+## [2026-11-20] — Bloque C3 y Auditoría: MRP / Compra Sugerida, Reservas de Borradores y Fabricación Multietapa a Granel (rama `fix/ux-refinements`)
+- **Requerimiento:** Planificar compras automáticas considerando stock vigente, reservas en órdenes `Draft` y mínimos (MRP), más fabricación de bases/semielaborados a granel con posterior envasado en múltiples presentaciones, costo CPP y Recall multietapa.
+- **Cambios en Core, Persistencia y Servicios:**
+  - `RawMaterialCategory.SemiFinished`, `ProductFormula` (`ProductId` nullable + `OutputRawMaterialId`), `ProductionOrder`, `RawMaterialBatch` (`SourceProductionOrderId`), `AppDbContextConfiguration` (`DeleteBehavior.Restrict`) y migración SQL Server `20261120195804_AddSemiFinishedBulkManufacturing.cs`.
+  - `IMaterialPlanningService` / `MaterialPlanningService` + `ServiceRegistrationExtensions`: cálculo de faltantes globales (`GetPurchaseSuggestionsAsync`) y por fórmula (`GetShortagesForFormulaAsync`) descontando lotes vencidos, sumando reservas en borradores (`Draft`) y excluyendo insumos fabricados internamente (`SemiFinished` / salidas de fórmulas).
+  - `FormulaValidationHelper`, `FormulaService`, `ProductionOutputRecorder`, `ProductionPlannerHelper`, `ProductionOrderService`, `ProductionExecutionHelper`, `ManufacturingAccountingService`: exclusividad XOR entre producto terminado y material granel, detección BFS de ciclos directos o transitivos (`A -> B -> A`), ingreso de lotes `RawMaterialBatch` + Kardex al completar granel y liquidación contable WIP (`1104`) hacia Inventario de Materias Primas/Granel (`1103-01`).
+  - `RawMaterialBatchService`: trazabilidad inversa (`Recall`) multietapa por cola BFS con unidad real consumida (`ConsumedUnit`) y referencia al granel intermedio (`ViaBulkBatchCode`).
+- **Cambios en UI y Auditoría C3:**
+  - `Formulas.razor/.cs`: selector de salida (`Producto` / `Granel`), filtro de semielaborados, prioridad en selector a categoría `SemiFinished` y etiqueta dinámica de unidad de rendimiento.
+  - `ProductionOrders.razor/.cs`, `ProductionOrderDetailModal.razor`: badge `Granel`, reservas de borradores visibles, unidad dinámica, enlace `"Comprar faltantes"` (`/purchases?fromFormulaId=...&qty=...`) y mensaje de cierre diferenciado.
+  - `Purchases.razor/.cs`, `RawMaterialBatches.razor`: alerta MRP + botón `"Sugerir MRP"`, prellenado automático excluyendo semielaborados internos con aviso específico cuando solo falta granel interno, reset limpio de query strings y origen `OP` + trazabilidad multietapa en Recall.
+  - Nuevas pruebas TDD en `MaterialPlanningServiceTests.cs` y `BulkManufacturingTests.cs`.
+- **Verificación:** `dotnet build --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `119 / 119` pruebas aprobadas, `has-pending-model-changes --configuration Release` sin cambios, máximo `196` líneas en `.cs` propios y smoke test HTTP autenticado (`200 OK` en `/formulas`, `/production`, `/purchases`, `/purchases?fromFormulaId=1&qty=1000`, `/raw-material-batches`, `/batches`, `/kardex`).
+

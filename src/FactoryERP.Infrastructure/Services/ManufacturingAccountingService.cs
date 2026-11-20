@@ -63,7 +63,11 @@ public sealed class ManufacturingAccountingService : IManufacturingAccountingSer
         var lines = new List<(string, decimal, decimal, string)>();
 
         if (order.CapitalizedInventoryCost > 0m)
-            lines.Add((AccountCodes.FinishedGoodsInventory, order.CapitalizedInventoryCost, 0m, $"Ingreso producto terminado lote {order.BatchCode}"));
+        {
+            string targetAccount = order.IsSemiFinishedOutput ? AccountCodes.RawMaterialInventory : AccountCodes.FinishedGoodsInventory;
+            string entryDesc = order.IsSemiFinishedOutput ? $"Ingreso granel/semielaborado lote {order.BatchCode}" : $"Ingreso producto terminado lote {order.BatchCode}";
+            lines.Add((targetAccount, order.CapitalizedInventoryCost, 0m, entryDesc));
+        }
         if (order.AbnormalLossCost > 0m)
             lines.Add((AccountCodes.AbnormalProductionLoss, order.AbnormalLossCost, 0m, $"Merma anormal orden {order.OrderNumber}"));
         if (matVariance < 0m)

@@ -13,12 +13,15 @@ internal static class ProductionPlannerHelper
         ProductFormula formula,
         int plannedQuantity,
         decimal lossMarginPercent,
-        IReadOnlyDictionary<int, decimal>? expiredByMaterial = null)
+        IReadOnlyDictionary<int, decimal>? expiredByMaterial = null,
+        IReadOnlyDictionary<int, decimal>? reservedByDrafts = null)
     {
         if (!formula.IsActive)
             throw new InvalidOperationException($"La fórmula '{formula.Name}' está inactiva y no puede usarse.");
         if (formula.BaseYieldQuantity <= 0)
             throw new InvalidOperationException("El rendimiento base de la fórmula debe ser mayor a cero.");
+        if (formula.OutputRawMaterialId.HasValue && formula.OutputRawMaterial is not { IsActive: true })
+            throw new InvalidOperationException("El material semielaborado de salida está inactivo y no puede producirse.");
 
         decimal scaleFactor = plannedQuantity / (decimal)formula.BaseYieldQuantity;
         int expectedResulting = ProductionCostCalculator.CalculateExpectedResultingQuantity(plannedQuantity, lossMarginPercent);
@@ -37,6 +40,7 @@ internal static class ProductionPlannerHelper
             requiredInMatUnit = Math.Round(requiredInMatUnit, 4, MidpointRounding.AwayFromZero);
 
             decimal expired = expiredByMaterial != null && expiredByMaterial.TryGetValue(mat.Id, out var exp) ? exp : 0m;
+            decimal reserved = reservedByDrafts != null && reservedByDrafts.TryGetValue(mat.Id, out var res) ? res : 0m;
             decimal usableStock = Math.Max(0m, Math.Round(mat.CurrentStock - expired, 4, MidpointRounding.AwayFromZero));
             decimal estCost = Math.Round(requiredInMatUnit * mat.AverageCost, 2, MidpointRounding.AwayFromZero);
             bool sufficient = usableStock >= requiredInMatUnit;
@@ -50,7 +54,8 @@ internal static class ProductionPlannerHelper
                 usableStock,
                 mat.AverageCost,
                 estCost,
-                sufficient));
+                sufficient,
+                reserved));
         }
 
         decimal estMaterialCost = requirements.Sum(r => r.EstimatedTotalCost);
@@ -62,7 +67,7 @@ internal static class ProductionPlannerHelper
 
         return new ProductionSimulationDto(
             formula.ProductId,
-            formula.Product?.Name ?? string.Empty,
+            formula.OutputDisplayName,
             formula.Id,
             formula.Name,
             formula.Version,
@@ -75,7 +80,9 @@ internal static class ProductionPlannerHelper
             estTotal,
             estUnit,
             requirements.All(r => r.HasSufficientStock),
-            requirements);
+            requirements,
+            formula.OutputRawMaterialId,
+            formula.OutputRawMaterial?.UnitOfMeasure);
     }
 
     public static ProductionOrder BuildDraftOrder(
@@ -92,6 +99,7 @@ internal static class ProductionPlannerHelper
         ProductionOrder order, ProductionSimulationDto sim, UpdateProductionOrderRequest request, string batchCode)
     {
         order.ProductId = sim.ProductId;
+        order.OutputRawMaterialId = sim.OutputRawMaterialId;
         order.ProductFormulaId = sim.FormulaId;
         order.BatchCode = batchCode;
         order.PlannedDate = request.PlannedDate ?? DateTime.UtcNow;
@@ -121,6 +129,7 @@ internal static class ProductionPlannerHelper
     public static async Task EnsureBatchCodeUniqueAsync(AppDbContext context, string batchCode, int? excludeOrderId = null)
     {
         bool exists = await context.FinishedBatches.AnyAsync(b => b.BatchCode == batchCode)
+            || await context.RawMaterialBatches.AnyAsync(b => b.BatchCode == batchCode)
             || await context.ProductionOrders.AnyAsync(
                 o => (!excludeOrderId.HasValue || o.Id != excludeOrderId.Value)
                      && o.BatchCode == batchCode

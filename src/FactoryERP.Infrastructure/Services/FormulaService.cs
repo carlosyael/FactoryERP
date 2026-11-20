@@ -22,11 +22,15 @@ public sealed class FormulaService : IFormulaService
         var query = context.ProductFormulas
             .AsNoTracking()
             .Include(f => f.Product)
+            .Include(f => f.OutputRawMaterial)
             .Include(f => f.Items).ThenInclude(i => i.RawMaterial)
             .AsQueryable();
 
         if (!includeInactive) query = query.Where(f => f.IsActive);
-        return await query.OrderBy(f => f.Product!.Name).ThenByDescending(f => f.Version).ToListAsync();
+        return await query
+            .OrderBy(f => f.Product != null ? f.Product.Name : (f.OutputRawMaterial != null ? f.OutputRawMaterial.Name : f.Name))
+            .ThenByDescending(f => f.Version)
+            .ToListAsync();
     }
 
     public async Task<List<ProductFormula>> GetByProductIdAsync(int productId)
@@ -46,6 +50,7 @@ public sealed class FormulaService : IFormulaService
         return await context.ProductFormulas
             .AsNoTracking()
             .Include(f => f.Product)
+            .Include(f => f.OutputRawMaterial)
             .Include(f => f.Items).ThenInclude(i => i.RawMaterial)
             .FirstOrDefaultAsync(f => f.Id == id);
     }
@@ -87,6 +92,7 @@ public sealed class FormulaService : IFormulaService
         await FormulaValidationHelper.ValidateFormulaAsync(context, formula);
 
         existing.ProductId = formula.ProductId;
+        existing.OutputRawMaterialId = formula.OutputRawMaterialId;
         existing.Name = formula.Name.Trim();
         existing.Version = formula.Version.Trim();
         existing.BaseYieldQuantity = formula.BaseYieldQuantity;
@@ -115,7 +121,9 @@ public sealed class FormulaService : IFormulaService
             ?? throw new InvalidOperationException("Fórmula no encontrada.");
 
         var versionSet = (await context.ProductFormulas
-            .Where(f => f.ProductId == source.ProductId)
+            .Where(f => source.OutputRawMaterialId.HasValue
+                ? f.OutputRawMaterialId == source.OutputRawMaterialId
+                : f.ProductId == source.ProductId)
             .Select(f => f.Version)
             .ToListAsync()).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -124,11 +132,12 @@ public sealed class FormulaService : IFormulaService
             : newVersion.Trim();
 
         if (versionSet.Contains(targetVersion))
-            throw new InvalidOperationException($"Ya existe la versión '{targetVersion}' para este producto.");
+            throw new InvalidOperationException($"Ya existe la versión '{targetVersion}' para este destino.");
 
         var clone = new ProductFormula
         {
             ProductId = source.ProductId,
+            OutputRawMaterialId = source.OutputRawMaterialId,
             Name = source.Name,
             Version = targetVersion,
             BaseYieldQuantity = source.BaseYieldQuantity,

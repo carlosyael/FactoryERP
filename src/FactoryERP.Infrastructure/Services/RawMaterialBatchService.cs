@@ -1,3 +1,4 @@
+using FactoryERP.Core.Domain;
 using FactoryERP.Core.Entities;
 using FactoryERP.Core.Enums;
 using FactoryERP.Core.Interfaces;
@@ -28,6 +29,7 @@ public sealed class RawMaterialBatchService : IRawMaterialBatchService
         await using var context = await _contextFactory.CreateDbContextAsync();
         var query = context.RawMaterialBatches.AsNoTracking()
             .Include(b => b.RawMaterial)
+            .Include(b => b.SourceProductionOrder)
             .Include(b => b.PurchaseOrder).ThenInclude(po => po!.Supplier)
             .AsQueryable();
 
@@ -45,35 +47,52 @@ public sealed class RawMaterialBatchService : IRawMaterialBatchService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var batch = await context.RawMaterialBatches.AsNoTracking()
-            .Include(b => b.RawMaterial)
+            .Include(b => b.RawMaterial).Include(b => b.SourceProductionOrder)
             .Include(b => b.PurchaseOrder).ThenInclude(po => po!.Supplier)
             .FirstOrDefaultAsync(b => b.Id == rawMaterialBatchId);
         if (batch == null) return null;
 
-        var allocations = await context.ProductionMaterialBatchAllocations.AsNoTracking()
-            .Include(a => a.ProductionOrder).ThenInclude(o => o!.Product)
-            .Where(a => a.RawMaterialBatchId == rawMaterialBatchId && a.QuantityAllocated > 0m)
-            .OrderByDescending(a => a.ProductionOrderId)
-            .ToListAsync();
+        var rawAffected = new List<(ProductionOrder Order, decimal Qty, string? ViaBulk, string Unit)>();
+        var queue = new Queue<(int BatchId, string? ViaBulk)>([(rawMaterialBatchId, null)]);
+        var visitedBatches = new HashSet<int> { rawMaterialBatchId };
 
-        var orderIds = allocations.Select(a => a.ProductionOrderId).Distinct().ToList();
+        while (queue.Count > 0)
+        {
+            var (curBatchId, viaBulk) = queue.Dequeue();
+            var allocs = await context.ProductionMaterialBatchAllocations.AsNoTracking()
+                .Include(a => a.RawMaterial)
+                .Include(a => a.ProductionOrder).ThenInclude(o => o!.Product)
+                .Include(a => a.ProductionOrder).ThenInclude(o => o!.OutputRawMaterial)
+                .Where(a => a.RawMaterialBatchId == curBatchId && a.QuantityAllocated > 0m)
+                .OrderByDescending(a => a.ProductionOrderId)
+                .ToListAsync();
+
+            foreach (var a in allocs.Where(a => a.ProductionOrder != null))
+            {
+                string unit = a.RawMaterial != null ? UnitConverter.GetShortLabel(a.RawMaterial.UnitOfMeasure) : "ud";
+                rawAffected.Add((a.ProductionOrder!, a.QuantityAllocated, viaBulk, unit));
+                if (!a.ProductionOrder!.IsSemiFinishedOutput) continue;
+                var childBatches = await context.RawMaterialBatches.AsNoTracking()
+                    .Where(b => b.SourceProductionOrderId == a.ProductionOrder.Id)
+                    .Select(b => new { b.Id, b.BatchCode }).ToListAsync();
+                foreach (var cb in childBatches)
+                    if (visitedBatches.Add(cb.Id)) queue.Enqueue((cb.Id, cb.BatchCode));
+            }
+        }
+
+        var orderIds = rawAffected.Select(x => x.Order.Id).Distinct().ToList();
         var finishedByOrder = (await context.FinishedBatches.AsNoTracking()
             .Where(fb => fb.ProductionOrderId.HasValue && orderIds.Contains(fb.ProductionOrderId.Value))
             .ToListAsync())
-            .GroupBy(fb => fb.ProductionOrderId!.Value)
-            .ToDictionary(g => g.Key, g => g.First());
+            .GroupBy(fb => fb.ProductionOrderId!.Value).ToDictionary(g => g.Key, g => g.First());
 
-        var affected = allocations
-            .Where(a => a.ProductionOrder != null)
-            .Select(a =>
-            {
-                var o = a.ProductionOrder!;
-                finishedByOrder.TryGetValue(o.Id, out var fb);
-                return new RecallAffectedOrderDto(
-                    o.Id, o.OrderNumber, o.BatchCode, o.Product?.Name ?? string.Empty,
-                    o.Status, a.QuantityAllocated, fb?.Id, fb?.QuantityRemaining);
-            })
-            .ToList();
+        var affected = rawAffected.Select(x =>
+        {
+            finishedByOrder.TryGetValue(x.Order.Id, out var fb);
+            return new RecallAffectedOrderDto(
+                x.Order.Id, x.Order.OrderNumber, x.Order.BatchCode, x.Order.OutputDisplayName,
+                x.Order.Status, x.Qty, fb?.Id, fb?.QuantityRemaining, x.Order.IsSemiFinishedOutput, x.ViaBulk, x.Unit);
+        }).ToList();
 
         return new RawMaterialBatchRecallDto(batch, affected);
     }

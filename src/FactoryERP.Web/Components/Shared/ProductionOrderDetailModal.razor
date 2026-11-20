@@ -2,6 +2,7 @@
 
 @if (Order != null)
 {
+    string outUnit = Order.IsSemiFinishedOutput && Order.OutputRawMaterial != null ? UnitConverter.GetShortLabel(Order.OutputRawMaterial.UnitOfMeasure) : "uds";
     <div class="modal fade show d-block print-modal" style="background: rgba(0,0,0,0.45);">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -15,7 +16,11 @@
                     <div class="border-bottom pb-2 mb-3 d-flex justify-content-between align-items-start">
                         <div>
                             <h6 class="fw-bold mb-1">Orden @Order.OrderNumber — Lote <code>@Order.BatchCode</code></h6>
-                            <div><strong>Producto:</strong> @Order.Product?.Name @(!string.IsNullOrWhiteSpace(Order.Product?.Presentation) ? $"({Order.Product!.Presentation})" : "")</div>
+                            <div>
+                                <strong>@(Order.IsSemiFinishedOutput ? "Granel / Semielaborado:" : "Producto:")</strong> @Order.OutputDisplayName
+                                @(!string.IsNullOrWhiteSpace(Order.Product?.Presentation) ? $"({Order.Product!.Presentation})" : "")
+                                @if (Order.IsSemiFinishedOutput) { <span class="badge bg-info-subtle text-info-emphasis ms-1">Granel</span> }
+                            </div>
                             <div><strong>Fórmula:</strong> @Order.ProductFormula?.Name (v@(Order.ProductFormula?.Version))</div>
                         </div>
                         <span class="badge bg-secondary">@Order.Status</span>
@@ -99,9 +104,9 @@
 
                     <div class="row g-2 border-top pt-2">
                         <div class="col-md-6">
-                            <div><strong>Planificado / Esperado:</strong> @Order.PlannedQuantity / @Order.ExpectedResultingQuantity uds (@Order.ExpectedLossMarginPercent.ToString("N2")%)</div>
-                            <div><strong>Resultante Real:</strong> @(Order.ActualYieldQuantity?.ToString() ?? "-") uds</div>
-                            <div><strong>Merma Real:</strong> @(Order.ActualLossPercent.HasValue ? $"{Order.ActualLossPercent:N2}% ({Order.ActualLossQuantity} uds)" : "-")</div>
+                            <div><strong>Planificado / Esperado:</strong> @Order.PlannedQuantity / @Order.ExpectedResultingQuantity @outUnit (@Order.ExpectedLossMarginPercent.ToString("N2")%)</div>
+                            <div><strong>Resultante Real:</strong> @(Order.ActualYieldQuantity?.ToString() ?? "-") @outUnit</div>
+                            <div><strong>Merma Real:</strong> @(Order.ActualLossPercent.HasValue ? $"{Order.ActualLossPercent:N2}% ({Order.ActualLossQuantity} {outUnit})" : "-")</div>
                         </div>
                         <div class="col-md-6 text-md-end">
                             <div><strong>MP Est. / Real:</strong> @CurrencySymbol @Order.EstimatedMaterialCost.ToString("N2") / @CurrencySymbol @Order.ActualMaterialCost.ToString("N2")</div>

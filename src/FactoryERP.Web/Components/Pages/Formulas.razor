@@ -8,8 +8,9 @@
     </div>
     <div class="d-flex flex-wrap align-items-center gap-2">
         <input class="form-control form-control-sm" style="width: 190px;" placeholder="Buscar fórmula o producto..." @bind="_search" @bind:event="oninput" />
-        <select class="form-select form-select-sm" style="width: 185px;" @bind="_productFilter">
-            <option value="0">Todos los productos</option>
+        <select class="form-select form-select-sm" style="width: 195px;" @bind="_productFilter">
+            <option value="0">Todos los destinos</option>
+            <option value="-1">Solo Granel / Semielaborados</option>
             @foreach (var p in _products)
             {
                 <option value="@p.Id">@p.Name</option>
@@ -31,17 +32,27 @@
                 <div class="d-flex justify-content-between align-items-start mb-2">
                     <div>
                         <span class="badge badge-brand me-1">v@(f.Version)</span>
+                        @if (f.IsSemiFinishedOutput) { <span class="badge bg-info-subtle text-info-emphasis me-1">Granel</span> }
                         <strong class="fs-6">@f.Name</strong>
                         @if (!f.IsActive) { <span class="badge bg-secondary ms-1">Inactiva</span> }
-                        <div class="small text-muted">Producto: @f.Product?.Name (@f.Product?.Presentation)</div>
+                        <div class="small text-muted">
+                            @(f.IsSemiFinishedOutput
+                                ? $"Granel destino: {f.OutputRawMaterial?.Name} ({f.OutputRawMaterial?.Sku})"
+                                : $"Producto: {f.Product?.Name} ({f.Product?.Presentation})")
+                        </div>
                     </div>
                     <div class="d-flex gap-1">
                         <button class="btn btn-sm btn-outline-primary" title="Clonar como nueva versión" @onclick="() => CloneVersionAsync(f.Id)"><i class="bi bi-copy"></i></button>
                         <button class="btn btn-sm btn-outline-secondary" title="Editar fórmula" @onclick="() => OpenEditModal(f)"><i class="bi bi-pencil"></i></button>
                     </div>
                 </div>
+                @{
+                    string yieldUnit = f.IsSemiFinishedOutput && f.OutputRawMaterial != null
+                        ? UnitConverter.GetShortLabel(f.OutputRawMaterial.UnitOfMeasure)
+                        : "uds";
+                }
                 <div class="d-flex flex-wrap gap-3 small mb-2">
-                    <span>Rendimiento base: <strong>@f.BaseYieldQuantity uds</strong></span>
+                    <span>Rendimiento base: <strong>@f.BaseYieldQuantity @yieldUnit</strong></span>
                     <span>Merma estándar: <strong>@f.StandardLossMarginPercent.ToString("N2")%</strong></span>
                     <span>CIF lote: <strong>@_currencySymbol @f.OverheadCostPerBatch.ToString("N2")</strong></span>
                     @if (_formulaSummary.TryGetValue(f.Id, out var summary))
@@ -80,17 +91,41 @@
             </div>
             <div class="modal-body">
                 <div class="row g-2 mb-2">
-                    <div class="col-md-6">
-                        <label class="form-label small">Producto Terminado</label>
-                        <select class="form-select" @bind="_editing.ProductId">
-                            @foreach (var p in _products) { <option value="@p.Id">@p.Name (@p.Presentation)</option> }
-                        </select>
+                    <div class="col-md-3">
+                        <label class="form-label small d-block">Tipo de Salida</label>
+                        <div class="btn-group btn-group-sm w-100" role="group">
+                            <button type="button" class="btn @(!_isSemiFinished ? "btn-brand" : "btn-outline-secondary")" @onclick="() => _isSemiFinished = false">Producto</button>
+                            <button type="button" class="btn @(_isSemiFinished ? "btn-brand" : "btn-outline-secondary")" @onclick="() => _isSemiFinished = true">Granel</button>
+                        </div>
                     </div>
-                    <div class="col-md-4"><label class="form-label small">Nombre Fórmula</label><input class="form-control" @bind="_editing.Name" /></div>
+                    <div class="col-md-4">
+                        @if (_isSemiFinished)
+                        {
+                            <label class="form-label small">Material Granel de Salida</label>
+                            <select class="form-select" @bind="_targetBulkMaterialId">
+                                @foreach (var m in _materials.Where(x => x.IsActive || x.Id == _targetBulkMaterialId).OrderByDescending(x => x.Category == RawMaterialCategory.SemiFinished).ThenBy(x => x.Name))
+                                {
+                                    <option value="@m.Id">@m.Name (@UnitConverter.GetShortLabel(m.UnitOfMeasure))</option>
+                                }
+                            </select>
+                        }
+                        else
+                        {
+                            <label class="form-label small">Producto Terminado</label>
+                            <select class="form-select" @bind="_targetProductId">
+                                @foreach (var p in _products) { <option value="@p.Id">@p.Name (@p.Presentation)</option> }
+                            </select>
+                        }
+                    </div>
+                    <div class="col-md-3"><label class="form-label small">Nombre Fórmula</label><input class="form-control" @bind="_editing.Name" /></div>
                     <div class="col-md-2"><label class="form-label small">Versión</label><input class="form-control" @bind="_editing.Version" /></div>
                 </div>
+                @{
+                    var selectedBulk = _isSemiFinished ? _materials.FirstOrDefault(m => m.Id == _targetBulkMaterialId) : null;
+                    string modalYieldUnit = selectedBulk != null ? UnitConverter.GetShortLabel(selectedBulk.UnitOfMeasure) : "uds";
+                }
                 <div class="row g-2 mb-3">
-                    <div class="col-md-4"><label class="form-label small">Rendimiento Base (uds)</label><input type="number" class="form-control" @bind="_editing.BaseYieldQuantity" /></div>
+                    <div class="col-md-4"><label class="form-label small">Rendimiento Base (@modalYieldUnit)</label><input type="number" class="form-control" @bind="_editing.BaseYieldQuantity" /></div>
                     <div class="col-md-4"><label class="form-label small">Merma Estándar (%)</label><input type="number" step="0.5" class="form-control" @bind="_editing.StandardLossMarginPercent" /></div>
                     <div class="col-md-4"><label class="form-label small">Costo Indirecto/Lote (@_currencySymbol)</label><input type="number" step="1" class="form-control" @bind="_editing.OverheadCostPerBatch" /></div>
                 </div>

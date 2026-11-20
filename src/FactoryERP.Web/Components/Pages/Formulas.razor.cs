@@ -26,14 +26,16 @@ public partial class Formulas
     private readonly Dictionary<int, (decimal MaterialCost, decimal UnitCost)> _formulaSummary = new();
     private ProductFormula _editing = new();
     private List<EditableFormulaItem> _items = new();
+    private bool _isSemiFinished;
+    private int _targetProductId, _targetBulkMaterialId;
     private bool _showModal;
 
     private IEnumerable<ProductFormula> FilteredFormulas => _formulas.Where(f =>
         (_showInactive || f.IsActive) &&
-        (_productFilter == 0 || f.ProductId == _productFilter) &&
+        (_productFilter == 0 || (_productFilter == -1 ? f.IsSemiFinishedOutput : f.ProductId == _productFilter)) &&
         (string.IsNullOrWhiteSpace(_search) ||
          f.Name.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ||
-         (f.Product?.Name.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ?? false)));
+         f.OutputDisplayName.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)));
 
     protected override async Task OnInitializedAsync()
     {
@@ -62,10 +64,18 @@ public partial class Formulas
 
     private void OpenNewModal()
     {
-        var defaultMat = _materials.FirstOrDefault(m => m.IsActive) ?? _materials.FirstOrDefault();
+        var defaultBulk = _materials.FirstOrDefault(m => m.IsActive && m.Category == RawMaterialCategory.SemiFinished)
+            ?? _materials.FirstOrDefault(m => m.IsActive)
+            ?? _materials.FirstOrDefault();
+        var defaultMat = _materials.FirstOrDefault(m => m.IsActive && m.Id != defaultBulk?.Id)
+            ?? _materials.FirstOrDefault(m => m.IsActive)
+            ?? _materials.FirstOrDefault();
+        _isSemiFinished = false;
+        _targetProductId = _products.FirstOrDefault()?.Id ?? 0;
+        _targetBulkMaterialId = defaultBulk?.Id ?? 0;
         _editing = new ProductFormula
         {
-            ProductId = _products.FirstOrDefault()?.Id ?? 0,
+            ProductId = _targetProductId > 0 ? _targetProductId : null,
             Version = "1.0",
             BaseYieldQuantity = 10,
             StandardLossMarginPercent = _defaultLossMargin
@@ -76,10 +86,14 @@ public partial class Formulas
 
     private void OpenEditModal(ProductFormula f)
     {
+        _isSemiFinished = f.IsSemiFinishedOutput;
+        _targetProductId = f.ProductId ?? (_products.FirstOrDefault()?.Id ?? 0);
+        _targetBulkMaterialId = f.OutputRawMaterialId ?? (_materials.FirstOrDefault(m => m.IsActive)?.Id ?? 0);
         _editing = new ProductFormula
         {
-            Id = f.Id, ProductId = f.ProductId, Name = f.Name, Version = f.Version,
-            BaseYieldQuantity = f.BaseYieldQuantity, StandardLossMarginPercent = f.StandardLossMarginPercent,
+            Id = f.Id, ProductId = f.ProductId, OutputRawMaterialId = f.OutputRawMaterialId,
+            Name = f.Name, Version = f.Version, BaseYieldQuantity = f.BaseYieldQuantity,
+            StandardLossMarginPercent = f.StandardLossMarginPercent,
             OverheadCostPerBatch = f.OverheadCostPerBatch, Instructions = f.Instructions, IsActive = f.IsActive
         };
         _items = f.Items.Select(i => new EditableFormulaItem
@@ -121,6 +135,8 @@ public partial class Formulas
     {
         try
         {
+            _editing.ProductId = _isSemiFinished ? null : _targetProductId;
+            _editing.OutputRawMaterialId = _isSemiFinished ? _targetBulkMaterialId : null;
             _editing.Items = _items.Select(i => new FormulaItem
             {
                 RawMaterialId = i.RawMaterialId, QuantityRequired = i.QuantityRequired, UnitOfMeasure = i.UnitOfMeasure

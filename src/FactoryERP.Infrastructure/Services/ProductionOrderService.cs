@@ -29,13 +29,13 @@ public sealed class ProductionOrderService : IProductionOrderService
 
     private static IQueryable<ProductionOrder> HydrateOrders(AppDbContext context) =>
         context.ProductionOrders.AsNoTracking()
-            .Include(o => o.Product).Include(o => o.ProductFormula)
+            .Include(o => o.Product).Include(o => o.OutputRawMaterial).Include(o => o.ProductFormula)
             .Include(o => o.Materials).ThenInclude(m => m.RawMaterial)
             .Include(o => o.BatchAllocations).ThenInclude(a => a.RawMaterialBatch).ThenInclude(b => b!.RawMaterial);
 
     private static async Task<ProductionOrder> LoadForExecutionAsync(AppDbContext context, int orderId) =>
         await context.ProductionOrders
-            .Include(o => o.ProductFormula)
+            .Include(o => o.ProductFormula).Include(o => o.OutputRawMaterial)
             .Include(o => o.Materials)
             .Include(o => o.BatchAllocations).ThenInclude(a => a.RawMaterialBatch)
             .FirstOrDefaultAsync(o => o.Id == orderId)
@@ -58,15 +58,16 @@ public sealed class ProductionOrderService : IProductionOrderService
     {
         await using var context = await _contextFactory.CreateDbContextAsync();
         var formula = await context.ProductFormulas.AsNoTracking()
-            .Include(f => f.Product)
+            .Include(f => f.Product).Include(f => f.OutputRawMaterial)
             .Include(f => f.Items).ThenInclude(i => i.RawMaterial)
             .FirstOrDefaultAsync(f => f.Id == formulaId)
             ?? throw new InvalidOperationException("Fórmula no encontrada.");
 
-        var expired = await RawMaterialBatchAllocator.GetExpiredStockByMaterialAsync(
-            context, formula.Items.Select(i => i.RawMaterialId), DateTime.UtcNow.Date);
+        var matIds = formula.Items.Select(i => i.RawMaterialId).ToList();
+        var expired = await RawMaterialBatchAllocator.GetExpiredStockByMaterialAsync(context, matIds, DateTime.UtcNow.Date);
+        var reserved = await MaterialPlanningService.GetDraftReservationsAsync(context, matIds);
         decimal loss = overrideLossMarginPercent ?? formula.StandardLossMarginPercent;
-        return ProductionPlannerHelper.BuildSimulation(formula, plannedQuantity, loss, expired);
+        return ProductionPlannerHelper.BuildSimulation(formula, plannedQuantity, loss, expired, reserved);
     }
 
     public async Task<ProductionOrder> CreateDraftAsync(CreateProductionOrderRequest request)

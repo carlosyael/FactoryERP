@@ -79,7 +79,9 @@ internal static class AppDbContextConfiguration
     {
         builder.Entity<RawMaterial>().HasIndex(x => x.Sku).IsUnique();
         builder.Entity<RawMaterialBatch>().HasIndex(x => x.BatchCode);
+        builder.Entity<RawMaterialBatch>().HasIndex(x => x.SourceProductionOrderId);
         builder.Entity<RawMaterialBatch>().HasIndex(x => new { x.RawMaterialId, x.ExpirationDate });
+        builder.Entity<ProductFormula>().HasIndex(x => x.OutputRawMaterialId);
         builder.Entity<ProductionMaterialBatchAllocation>().HasIndex(x => new { x.ProductionOrderId, x.RawMaterialBatchId });
         builder.Entity<Product>().HasIndex(x => x.Sku).IsUnique();
         builder.Entity<PurchaseOrder>().HasIndex(x => x.OrderNumber).IsUnique();
@@ -102,10 +104,14 @@ internal static class AppDbContextConfiguration
         builder.Entity<PurchaseOrderItem>().HasOne(x => x.RawMaterial).WithMany().HasForeignKey(x => x.RawMaterialId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<RawMaterialBatch>().HasOne(x => x.RawMaterial).WithMany().HasForeignKey(x => x.RawMaterialId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<RawMaterialBatch>().HasOne(x => x.PurchaseOrder).WithMany().HasForeignKey(x => x.PurchaseOrderId).OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<RawMaterialBatch>().HasOne(x => x.SourceProductionOrder).WithMany().HasForeignKey(x => x.SourceProductionOrderId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<SupplierPayment>().HasOne(x => x.Supplier).WithMany().HasForeignKey(x => x.SupplierId).OnDelete(DeleteBehavior.Restrict);
 
+        builder.Entity<ProductFormula>().HasOne(x => x.Product).WithMany(p => p.Formulas).HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<ProductFormula>().HasOne(x => x.OutputRawMaterial).WithMany().HasForeignKey(x => x.OutputRawMaterialId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<FormulaItem>().HasOne(x => x.RawMaterial).WithMany().HasForeignKey(x => x.RawMaterialId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<ProductionOrder>().HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<ProductionOrder>().HasOne(x => x.OutputRawMaterial).WithMany().HasForeignKey(x => x.OutputRawMaterialId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<ProductionOrder>().HasOne(x => x.ProductFormula).WithMany().HasForeignKey(x => x.ProductFormulaId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<ProductionOrderMaterial>().HasOne(x => x.RawMaterial).WithMany().HasForeignKey(x => x.RawMaterialId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<ProductionMaterialBatchAllocation>().HasOne(x => x.ProductionOrder).WithMany(o => o.BatchAllocations).HasForeignKey(x => x.ProductionOrderId).OnDelete(DeleteBehavior.Cascade);

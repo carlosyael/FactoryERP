@@ -13,6 +13,9 @@ public class RawMaterialBatch : BaseEntity
     public int? PurchaseOrderId { get; set; }
     public PurchaseOrder? PurchaseOrder { get; set; }
 
+    public int? SourceProductionOrderId { get; set; }
+    public ProductionOrder? SourceProductionOrder { get; set; }
+
     [Required, StringLength(40)]
     public string BatchCode { get; set; } = string.Empty;
 

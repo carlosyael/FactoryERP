@@ -56,8 +56,8 @@
                                 <div class="text-muted">@b.RawMaterial?.Sku</div>
                             </td>
                             <td>
-                                <div>@(b.PurchaseOrder?.OrderNumber ?? "-")</div>
-                                <div class="text-muted">@(b.PurchaseOrder?.Supplier?.Name ?? "")</div>
+                                <div>@(b.PurchaseOrder?.OrderNumber ?? (b.SourceProductionOrder != null ? $"OP: {b.SourceProductionOrder.OrderNumber}" : "-"))</div>
+                                <div class="text-muted">@(b.PurchaseOrder?.Supplier?.Name ?? (b.SourceProductionOrder != null ? "Producción Granel" : ""))</div>
                             </td>
                             <td>@b.ReceivedDate.ToLocalTime().ToString("dd/MM/yyyy")</td>
                             <td>
@@ -108,7 +108,7 @@
                     <strong>Insumo:</strong> @_recallData.Batch.RawMaterial?.Name (@_recallData.Batch.RawMaterial?.Sku) |
                     <strong>Recibido:</strong> @_recallData.Batch.InitialQuantity.ToString("N2") @unit |
                     <strong>Disponible:</strong> @_recallData.Batch.QuantityRemaining.ToString("N2") @unit |
-                    <strong>Suplidor:</strong> @(_recallData.Batch.PurchaseOrder?.Supplier?.Name ?? "-")
+                    <strong>Origen:</strong> @(_recallData.Batch.PurchaseOrder?.Supplier?.Name ?? (_recallData.Batch.SourceProductionOrder != null ? $"OP {_recallData.Batch.SourceProductionOrder.OrderNumber}" : "-"))
                 </div>
                 @if (_recallData.AffectedOrders.Count == 0)
                 {
@@ -119,18 +119,22 @@
                     <div class="table-responsive">
                         <table class="table table-sm table-bordered mb-0">
                             <thead class="table-light">
-                                <tr><th>Orden</th><th>Producto</th><th>Lote Terminado</th><th>Estado OP</th><th class="text-end">Insumo Usado</th><th class="text-end">Stock Lote PT</th></tr>
+                                <tr><th>Orden</th><th>Producto / Destino</th><th>Lote Salida</th><th>Estado OP</th><th class="text-end">Insumo Usado</th><th class="text-end">Stock Lote PT</th></tr>
                             </thead>
                             <tbody>
                                 @foreach (var o in _recallData.AffectedOrders)
                                 {
                                     <tr>
                                         <td><code>@o.OrderNumber</code></td>
-                                        <td>@o.ProductName</td>
+                                        <td>
+                                            @o.ProductName
+                                            @if (o.IsSemiFinishedOutput) { <span class="badge bg-info-subtle text-info-emphasis ms-1">Granel</span> }
+                                            @if (!string.IsNullOrWhiteSpace(o.ViaBulkBatchCode)) { <div class="text-muted" style="font-size: 0.72rem;">vía granel <code>@o.ViaBulkBatchCode</code></div> }
+                                        </td>
                                         <td><code>@o.OutputBatchCode</code></td>
                                         <td>@o.OrderStatus</td>
-                                        <td class="text-end">@o.QuantityConsumed.ToString("N2") @unit</td>
-                                        <td class="text-end">@(o.FinishedBatchRemaining?.ToString() ?? "-") uds</td>
+                                        <td class="text-end">@o.QuantityConsumed.ToString("N2") @(o.ConsumedUnit ?? unit)</td>
+                                        <td class="text-end">@(o.IsSemiFinishedOutput ? "Granel (ver hijos)" : $"{o.FinishedBatchRemaining?.ToString() ?? "-"} uds")</td>
                                     </tr>
                                 }
                             </tbody>

@@ -11,10 +11,11 @@ public sealed record ProductionMaterialRequirementDto(
     decimal AvailableStock,
     decimal UnitCost,
     decimal EstimatedTotalCost,
-    bool HasSufficientStock);
+    bool HasSufficientStock,
+    decimal ReservedByDrafts = 0m);
 
 public sealed record ProductionSimulationDto(
-    int ProductId,
+    int? ProductId,
     string ProductName,
     int FormulaId,
     string FormulaName,
@@ -28,7 +29,9 @@ public sealed record ProductionSimulationDto(
     decimal EstimatedTotalCost,
     decimal EstimatedUnitCost,
     bool CanProduce,
-    IReadOnlyList<ProductionMaterialRequirementDto> Materials);
+    IReadOnlyList<ProductionMaterialRequirementDto> Materials,
+    int? OutputRawMaterialId = null,
+    UnitOfMeasure? OutputUnitOfMeasure = null);
 
 public sealed record CreateProductionOrderRequest(
     int ProductFormulaId,

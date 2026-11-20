@@ -12,18 +12,25 @@ public partial class Purchases
     [Inject] private IPurchaseOrderService PurchaseOrderService { get; set; } = default!;
     [Inject] private ISupplierService SupplierService { get; set; } = default!;
     [Inject] private IRawMaterialService RawMaterialService { get; set; } = default!;
+    [Inject] private IMaterialPlanningService MaterialPlanningService { get; set; } = default!;
     [Inject] private IBusinessProfileService BusinessProfileService { get; set; } = default!;
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
     [Inject] private SweetAlertService Swal { get; set; } = default!;
+
+    [SupplyParameterFromQuery(Name = "fromFormulaId")] public int? FromFormulaId { get; set; }
+    [SupplyParameterFromQuery(Name = "qty")] public int? PlannedQty { get; set; }
 
     private List<PurchaseOrder> _orders = new();
     private List<Supplier> _suppliers = new();
     private List<RawMaterial> _materials = new();
+    private List<MaterialPlanningSuggestionDto> _mrpSuggestions = new();
     private string _currencySymbol = "RD$";
     private decimal _taxRate = 0.18m;
     private bool _showModal;
     private int _supplierId;
     private PaymentMethod _paymentMethod = PaymentMethod.Cash;
     private string _notes = "";
+    private string? _appliedQueryKey;
     private List<EditableLine> _lines = new();
 
     protected override async Task OnInitializedAsync()
@@ -34,6 +41,44 @@ public partial class Purchases
         _orders = await PurchaseOrderService.GetAllAsync();
         _suppliers = await SupplierService.GetAllAsync();
         _materials = await RawMaterialService.GetAllAsync();
+        _mrpSuggestions = await MaterialPlanningService.GetPurchaseSuggestionsAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!FromFormulaId.HasValue && !PlannedQty.HasValue)
+        {
+            _appliedQueryKey = null;
+            return;
+        }
+
+        string key = $"{FromFormulaId}:{PlannedQty}";
+        if (FromFormulaId is > 0 && PlannedQty is > 0 && _appliedQueryKey != key)
+        {
+            _appliedQueryKey = key;
+            try
+            {
+                var shortages = await MaterialPlanningService.GetShortagesForFormulaAsync(FromFormulaId.Value, PlannedQty.Value);
+                var buyable = shortages.Where(s => !s.IsManufacturedInHouse).ToList();
+                var inHouse = shortages.Where(s => s.IsManufacturedInHouse).ToList();
+                if (buyable.Count > 0)
+                {
+                    string extraNote = inHouse.Count > 0
+                        ? $" (Granel interno pendiente: {string.Join(", ", inHouse.Select(x => x.Name))})"
+                        : string.Empty;
+                    OpenSuggestedPurchaseModal(buyable, $"Reposición fórmula #{FromFormulaId} ({PlannedQty} uds){extraNote}");
+                }
+                else if (inHouse.Count > 0)
+                {
+                    await Swal.FireAsync(
+                        "Fabricación interna requerida",
+                        $"Los faltantes son semielaborados producidos internamente ({string.Join(", ", inHouse.Select(x => x.Name))}). Crea primero su orden de granel.",
+                        SweetAlertIcon.Info);
+                    Navigation.NavigateTo("/purchases", replace: true);
+                }
+            }
+            catch (Exception ex) { await Swal.FireAsync("MRP", ex.Message, SweetAlertIcon.Warning); }
+        }
     }
 
     private void OpenNewModal()
@@ -42,6 +87,37 @@ public partial class Purchases
         _lines = _materials.Count > 0 ? [new() { RawMaterialId = _materials[0].Id, Quantity = 10, UnitCost = _materials[0].AverageCost }] : [];
         _notes = "";
         _showModal = true;
+    }
+
+    private void OpenMrpSuggestionsModal()
+    {
+        if (_mrpSuggestions.Count == 0)
+        {
+            OpenNewModal();
+            return;
+        }
+        OpenSuggestedPurchaseModal(_mrpSuggestions, "Reposición sugerida MRP (mínimos y borradores)");
+    }
+
+    private void OpenSuggestedPurchaseModal(IReadOnlyList<MaterialPlanningSuggestionDto> suggestions, string defaultNotes)
+    {
+        _supplierId = _suppliers.FirstOrDefault()?.Id ?? 0;
+        _lines = suggestions.Select(s => new EditableLine
+        {
+            RawMaterialId = s.RawMaterialId,
+            Quantity = s.SuggestedPurchaseQuantity,
+            UnitCost = s.ReferenceUnitCost,
+            IsTaxable = true
+        }).ToList();
+        _notes = defaultNotes;
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        if (FromFormulaId.HasValue || PlannedQty.HasValue)
+            Navigation.NavigateTo("/purchases", replace: true);
     }
 
     private void AddLine()
@@ -82,6 +158,9 @@ public partial class Purchases
             _showModal = false;
             _orders = await PurchaseOrderService.GetAllAsync();
             _materials = await RawMaterialService.GetAllAsync();
+            _mrpSuggestions = await MaterialPlanningService.GetPurchaseSuggestionsAsync();
+            if (FromFormulaId.HasValue || PlannedQty.HasValue)
+                Navigation.NavigateTo("/purchases", replace: true);
             await Swal.FireAsync("Compra registrada", "Stock, lotes MP, CPP y asiento contable actualizados.", SweetAlertIcon.Success);
         }
         catch (Exception ex) { await Swal.FireAsync("Error", ex.Message, SweetAlertIcon.Error); }

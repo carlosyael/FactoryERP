@@ -822,11 +822,14 @@ namespace FactoryERP.Infrastructure.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
 
+                    b.Property<int?>("OutputRawMaterialId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("OverheadCostPerBatch")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("ProductId")
+                    b.Property<int?>("ProductId")
                         .HasColumnType("int");
 
                     b.Property<decimal>("StandardLossMarginPercent")
@@ -845,6 +848,8 @@ namespace FactoryERP.Infrastructure.Migrations
                         .HasColumnType("nvarchar(20)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("OutputRawMaterialId");
 
                     b.HasIndex("ProductId");
 
@@ -975,6 +980,9 @@ namespace FactoryERP.Infrastructure.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
 
+                    b.Property<int?>("OutputRawMaterialId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("PlannedDate")
                         .HasColumnType("datetime2");
 
@@ -984,7 +992,7 @@ namespace FactoryERP.Infrastructure.Migrations
                     b.Property<int>("ProductFormulaId")
                         .HasColumnType("int");
 
-                    b.Property<int>("ProductId")
+                    b.Property<int?>("ProductId")
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("StartedAt")
@@ -1003,6 +1011,8 @@ namespace FactoryERP.Infrastructure.Migrations
 
                     b.HasIndex("OrderNumber")
                         .IsUnique();
+
+                    b.HasIndex("OutputRawMaterialId");
 
                     b.HasIndex("ProductFormulaId");
 
@@ -1296,6 +1306,9 @@ namespace FactoryERP.Infrastructure.Migrations
                     b.Property<DateTime>("ReceivedDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("SourceProductionOrderId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("UnitCost")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
@@ -1311,6 +1324,8 @@ namespace FactoryERP.Infrastructure.Migrations
                     b.HasIndex("BatchCode");
 
                     b.HasIndex("PurchaseOrderId");
+
+                    b.HasIndex("SourceProductionOrderId");
 
                     b.HasIndex("RawMaterialId", "ExpirationDate");
 
@@ -1879,11 +1894,17 @@ namespace FactoryERP.Infrastructure.Migrations
 
             modelBuilder.Entity("FactoryERP.Core.Entities.ProductFormula", b =>
                 {
+                    b.HasOne("FactoryERP.Core.Entities.RawMaterial", "OutputRawMaterial")
+                        .WithMany()
+                        .HasForeignKey("OutputRawMaterialId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("FactoryERP.Core.Entities.Product", "Product")
                         .WithMany("Formulas")
                         .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("OutputRawMaterial");
 
                     b.Navigation("Product");
                 });
@@ -1917,6 +1938,11 @@ namespace FactoryERP.Infrastructure.Migrations
 
             modelBuilder.Entity("FactoryERP.Core.Entities.ProductionOrder", b =>
                 {
+                    b.HasOne("FactoryERP.Core.Entities.RawMaterial", "OutputRawMaterial")
+                        .WithMany()
+                        .HasForeignKey("OutputRawMaterialId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("FactoryERP.Core.Entities.ProductFormula", "ProductFormula")
                         .WithMany()
                         .HasForeignKey("ProductFormulaId")
@@ -1926,8 +1952,9 @@ namespace FactoryERP.Infrastructure.Migrations
                     b.HasOne("FactoryERP.Core.Entities.Product", "Product")
                         .WithMany()
                         .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("OutputRawMaterial");
 
                     b.Navigation("Product");
 
@@ -1996,9 +2023,16 @@ namespace FactoryERP.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("FactoryERP.Core.Entities.ProductionOrder", "SourceProductionOrder")
+                        .WithMany()
+                        .HasForeignKey("SourceProductionOrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("PurchaseOrder");
 
                     b.Navigation("RawMaterial");
+
+                    b.Navigation("SourceProductionOrder");
                 });
 
             modelBuilder.Entity("FactoryERP.Core.Entities.Sale", b =>

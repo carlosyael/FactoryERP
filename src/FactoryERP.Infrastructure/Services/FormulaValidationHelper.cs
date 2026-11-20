@@ -10,6 +10,7 @@ internal static class FormulaValidationHelper
     public static bool HasStructuralChanges(ProductFormula existing, ProductFormula updated)
     {
         if (existing.ProductId != updated.ProductId
+            || existing.OutputRawMaterialId != updated.OutputRawMaterialId
             || !string.Equals(existing.Name.Trim(), (updated.Name ?? string.Empty).Trim(), StringComparison.Ordinal)
             || !string.Equals(existing.Version.Trim(), (updated.Version ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase)
             || existing.BaseYieldQuantity != updated.BaseYieldQuantity
@@ -61,16 +62,35 @@ internal static class FormulaValidationHelper
             throw new ArgumentException("El costo indirecto por lote no puede ser negativo.");
         if (formula.Items == null || formula.Items.Count == 0)
             throw new InvalidOperationException("La fórmula debe contener al menos una materia prima.");
-        if (!await context.Products.AnyAsync(p => p.Id == formula.ProductId))
-            throw new InvalidOperationException("Producto terminado no encontrado.");
+
+        bool hasProd = formula.ProductId is > 0;
+        bool hasBulk = formula.OutputRawMaterialId is > 0;
+        if (hasProd == hasBulk)
+            throw new InvalidOperationException("La fórmula debe asociarse exclusivamente a un producto terminado o a un material semielaborado/granel.");
+
+        if (hasProd)
+        {
+            formula.OutputRawMaterialId = null;
+            if (!await context.Products.AnyAsync(p => p.Id == formula.ProductId!.Value))
+                throw new InvalidOperationException("Producto terminado no encontrado.");
+        }
+        else
+        {
+            formula.ProductId = null;
+            int outputMatId = formula.OutputRawMaterialId!.Value;
+            if (!await context.RawMaterials.AnyAsync(m => m.Id == outputMatId))
+                throw new InvalidOperationException("Material semielaborado/granel de destino no encontrado.");
+            if (formula.Items.Any(i => i.RawMaterialId == outputMatId) || await CreatesCircularDependencyAsync(context, formula.Id, outputMatId, formula.Items.Select(i => i.RawMaterialId)))
+                throw new InvalidOperationException("La fórmula genera una referencia circular sobre el mismo material semielaborado.");
+        }
 
         string normalizedVersion = formula.Version.Trim();
         var existingVersions = await context.ProductFormulas
-            .Where(f => f.ProductId == formula.ProductId && f.Id != formula.Id)
+            .Where(f => f.Id != formula.Id && (hasBulk ? f.OutputRawMaterialId == formula.OutputRawMaterialId : f.ProductId == formula.ProductId))
             .Select(f => f.Version)
             .ToListAsync();
         if (existingVersions.Any(v => string.Equals(v.Trim(), normalizedVersion, StringComparison.OrdinalIgnoreCase)))
-            throw new InvalidOperationException($"Ya existe la versión '{normalizedVersion}' para este producto.");
+            throw new InvalidOperationException($"Ya existe la versión '{normalizedVersion}' para este {(hasBulk ? "semielaborado" : "producto")}.");
 
         if (formula.Items.GroupBy(i => i.RawMaterialId).Any(g => g.Count() > 1))
             throw new InvalidOperationException("La fórmula no debe repetir la misma materia prima.");
@@ -88,5 +108,30 @@ internal static class FormulaValidationHelper
                 throw new InvalidOperationException(
                     $"La unidad {item.UnitOfMeasure} es incompatible con '{mat.Name}' ({mat.UnitOfMeasure}).");
         }
+    }
+
+    private static async Task<bool> CreatesCircularDependencyAsync(
+        AppDbContext context, int editingFormulaId, int targetRawMaterialId, IEnumerable<int> directIngredientIds)
+    {
+        var edges = await context.ProductFormulas.AsNoTracking()
+            .Where(f => f.Id != editingFormulaId && f.OutputRawMaterialId.HasValue)
+            .Select(f => new { OutId = f.OutputRawMaterialId!.Value, IngIds = f.Items.Select(i => i.RawMaterialId).ToList() })
+            .ToListAsync();
+
+        var depsByMaterial = edges
+            .GroupBy(e => e.OutId)
+            .ToDictionary(g => g.Key, g => g.SelectMany(x => x.IngIds).Distinct().ToList());
+
+        var visited = new HashSet<int>();
+        var queue = new Queue<int>(directIngredientIds.Distinct());
+        while (queue.Count > 0)
+        {
+            int current = queue.Dequeue();
+            if (current == targetRawMaterialId) return true;
+            if (!visited.Add(current) || !depsByMaterial.TryGetValue(current, out var nextIds)) continue;
+            foreach (int next in nextIds) queue.Enqueue(next);
+        }
+
+        return false;
     }
 }

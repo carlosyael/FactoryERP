@@ -15,6 +15,8 @@ internal static class ProductionExecutionHelper
             throw new InvalidOperationException("Solo las órdenes en borrador pueden iniciarse.");
         if (order.ProductFormula is { IsActive: false })
             throw new InvalidOperationException($"La fórmula '{order.ProductFormula.Name}' está inactiva y no puede iniciarse.");
+        if (order.OutputRawMaterial is { IsActive: false })
+            throw new InvalidOperationException($"El semielaborado '{order.OutputRawMaterial.Name}' está inactivo y no puede iniciarse.");
 
         var matIds = order.Materials.Select(m => m.RawMaterialId).OrderBy(id => id).ToList();
         var materials = await context.RawMaterials.Where(m => matIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id);
@@ -81,31 +83,8 @@ internal static class ProductionExecutionHelper
 
         if (request.ActualYieldQuantity <= 0) return initialWipMaterialCost;
 
-        var product = await context.Products.FindAsync(order.ProductId)
-            ?? throw new InvalidOperationException("Producto terminado no encontrado.");
-        int existingStock = await context.FinishedBatches
-            .Where(b => b.ProductId == order.ProductId && b.QuantityRemaining > 0)
-            .SumAsync(b => b.QuantityRemaining);
-
-        product.Cost = ProductionCostCalculator.CalculateWeightedAverageCost(
-            existingStock, product.Cost, request.ActualYieldQuantity, costResult.ActualUnitCost);
-
-        var newBatch = new FinishedBatch
-        {
-            ProductId = order.ProductId,
-            ProductionOrderId = order.Id,
-            BatchCode = order.BatchCode,
-            ProductionDate = DateTime.UtcNow,
-            ExpirationDate = order.ExpirationDate,
-            InitialQuantity = request.ActualYieldQuantity,
-            QuantityRemaining = request.ActualYieldQuantity,
-            UnitCost = costResult.ActualUnitCost,
-            QualityStatus = requireQualityApproval ? BatchQualityStatus.Quarantine : BatchQualityStatus.Approved
-        };
-        context.FinishedBatches.Add(newBatch);
-        InventoryKardexRecorder.RecordFinishedBatch(
-            context, newBatch, InventoryMovementType.ProductionBatchOutput, request.ActualYieldQuantity,
-            request.ActualYieldQuantity, order.OrderNumber, $"Producción lote {order.BatchCode}", performedBy);
+        await ProductionOutputRecorder.RecordCompletionOutputAsync(
+            context, order, request.ActualYieldQuantity, costResult.ActualUnitCost, requireQualityApproval, performedBy);
         return initialWipMaterialCost;
     }
 

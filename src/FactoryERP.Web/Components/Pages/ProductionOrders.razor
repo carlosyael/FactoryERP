@@ -31,15 +31,19 @@
                 <tbody>
                     @foreach (var o in FilteredOrders)
                     {
+                        string oUnit = o.IsSemiFinishedOutput && o.OutputRawMaterial != null ? UnitConverter.GetShortLabel(o.OutputRawMaterial.UnitOfMeasure) : "uds";
                         <tr>
                             <td>
                                 <strong>@o.OrderNumber</strong>
                                 <div class="small text-muted">Lote: @o.BatchCode</div>
                             </td>
-                            <td>@o.Product?.Name</td>
-                            <td>@o.PlannedQuantity / @o.ExpectedResultingQuantity uds (@o.ExpectedLossMarginPercent.ToString("N1")%)</td>
-                            <td>@(o.ActualYieldQuantity?.ToString() ?? "-") uds</td>
-                            <td>@(o.ActualLossPercent.HasValue ? $"{o.ActualLossPercent:N2}% ({o.ActualLossQuantity} uds)" : "-")</td>
+                            <td>
+                                @o.OutputDisplayName
+                                @if (o.IsSemiFinishedOutput) { <span class="badge bg-info-subtle text-info-emphasis ms-1">Granel</span> }
+                            </td>
+                            <td>@o.PlannedQuantity / @o.ExpectedResultingQuantity @oUnit (@o.ExpectedLossMarginPercent.ToString("N1")%)</td>
+                            <td>@(o.ActualYieldQuantity?.ToString() ?? "-") @oUnit</td>
+                            <td>@(o.ActualLossPercent.HasValue ? $"{o.ActualLossPercent:N2}% ({o.ActualLossQuantity} {oUnit})" : "-")</td>
                             <td>@(o.ActualUnitCost > 0 ? $"{_currencySymbol} {o.ActualUnitCost:N2}" : "-")</td>
                             <td><span class="badge @GetStatusBadge(o.Status)">@o.Status</span></td>
                             <td class="text-end text-nowrap">
@@ -81,7 +85,10 @@
                             {
                                 <option value="@_editingInactiveFormula.Id">@_editingInactiveProductName - @_editingInactiveFormula.Name (v@(_editingInactiveFormula.Version)) (Inactiva)</option>
                             }
-                            @foreach (var f in _formulas) { <option value="@f.Id">@f.Product?.Name - @f.Name (v@(f.Version))</option> }
+                            @foreach (var f in _formulas)
+                            {
+                                <option value="@f.Id">@(f.IsSemiFinishedOutput ? "[Granel]" : f.Product?.Name) @(f.IsSemiFinishedOutput ? f.OutputRawMaterial?.Name : "") - @f.Name (v@(f.Version))</option>
+                            }
                         </select>
                     </div>
                     <div class="col-md-3"><label class="form-label small">Cant. a Producir</label><input type="number" class="form-control" @bind="_plannedQuantity" @bind:after="SimulateAsync" /></div>
@@ -90,21 +97,40 @@
                 </div>
                 @if (_simulation != null)
                 {
-                    <div class="alert @(_simulation.CanProduce ? "alert-success" : "alert-danger") py-2 small">
-                        <strong>Resultante esperado:</strong> @_simulation.ExpectedResultingQuantity uds |
-                        <strong>Costo Total Est.:</strong> @_currencySymbol @_simulation.EstimatedTotalCost.ToString("N2") |
-                        <strong>Unitario Est.:</strong> @_currencySymbol @_simulation.EstimatedUnitCost.ToString("N2")
+                    string simUnit = _simulation.OutputUnitOfMeasure.HasValue ? UnitConverter.GetShortLabel(_simulation.OutputUnitOfMeasure.Value) : "uds";
+                    <div class="alert @(_simulation.CanProduce ? "alert-success" : "alert-danger") py-2 small d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div>
+                            <strong>Resultante esperado:</strong> @_simulation.ExpectedResultingQuantity @simUnit |
+                            <strong>Costo Total Est.:</strong> @_currencySymbol @_simulation.EstimatedTotalCost.ToString("N2") |
+                            <strong>Unitario Est.:</strong> @_currencySymbol @_simulation.EstimatedUnitCost.ToString("N2")
+                        </div>
+                        @if (!_simulation.CanProduce)
+                        {
+                            <AuthorizeView Policy="@Permissions.PurchasesManage">
+                                <Authorized>
+                                    <a class="btn btn-sm btn-warning fw-semibold" href="/purchases?fromFormulaId=@_selectedFormulaId&qty=@_plannedQuantity">
+                                        <i class="bi bi-cart-plus me-1"></i>Comprar faltantes
+                                    </a>
+                                </Authorized>
+                            </AuthorizeView>
+                        }
                     </div>
                     <div class="table-responsive mb-2">
                         <table class="table table-sm small mb-0">
-                            <thead><tr><th>Material</th><th>Requerido</th><th>Disponible</th><th>Costo Est.</th></tr></thead>
+                            <thead><tr><th>Material</th><th>Requerido</th><th>Disponible Vigente</th><th>Costo Est.</th></tr></thead>
                             <tbody>
                                 @foreach (var m in _simulation.Materials)
                                 {
                                     <tr class="@(m.HasSufficientStock ? "" : "table-danger")">
                                         <td>@m.Name</td>
                                         <td>@m.RequiredQuantity.ToString("N2") @UnitConverter.GetShortLabel(m.MaterialUnit)</td>
-                                        <td>@m.AvailableStock.ToString("N2")</td>
+                                        <td>
+                                            @m.AvailableStock.ToString("N2")
+                                            @if (m.ReservedByDrafts > 0m)
+                                            {
+                                                <div class="text-warning-emphasis" style="font-size:0.72rem;">Reservado borradores: @m.ReservedByDrafts.ToString("N2")</div>
+                                            }
+                                        </td>
                                         <td>@_currencySymbol @m.EstimatedTotalCost.ToString("N2")</td>
                                     </tr>
                                 }
@@ -129,13 +155,16 @@
 
 @if (_showComplete && _completeTarget != null)
 {
+    string compUnit = _completeTarget.IsSemiFinishedOutput && _completeTarget.OutputRawMaterial != null
+        ? UnitConverter.GetShortLabel(_completeTarget.OutputRawMaterial.UnitOfMeasure)
+        : "uds";
     <div class="modal fade show d-block" style="background: rgba(0,0,0,0.45);">
         <div class="modal-dialog modal-lg"><div class="modal-content">
             <div class="modal-header"><h5 class="modal-title">Completar Orden @_completeTarget.OrderNumber</h5><button class="btn-close" @onclick="() => _showComplete = false"></button></div>
             <div class="modal-body">
-                <div class="mb-2 small text-muted">Planificado: @_completeTarget.PlannedQuantity uds | Esperado: @_completeTarget.ExpectedResultingQuantity uds</div>
+                <div class="mb-2 small text-muted">Planificado: @_completeTarget.PlannedQuantity @compUnit | Esperado: @_completeTarget.ExpectedResultingQuantity @compUnit</div>
                 <div class="row g-2 mb-3">
-                    <div class="col-md-4"><label class="form-label small fw-semibold">Resultante Real (uds)</label><input type="number" class="form-control form-control-sm" @bind="_actualYield" /></div>
+                    <div class="col-md-4"><label class="form-label small fw-semibold">Resultante Real (@compUnit)</label><input type="number" class="form-control form-control-sm" @bind="_actualYield" /></div>
                     <div class="col-md-4"><label class="form-label small fw-semibold">CIF Real (@_currencySymbol)</label><input type="number" step="0.01" class="form-control form-control-sm" @bind="_actualOverhead" /></div>
                     <div class="col-md-4"><label class="form-label small fw-semibold">Vencimiento del Lote</label><input type="date" class="form-control form-control-sm" @bind="_expirationDate" /></div>
                 </div>

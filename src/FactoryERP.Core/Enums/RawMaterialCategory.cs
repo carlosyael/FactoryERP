@@ -9,5 +9,6 @@ public enum RawMaterialCategory
     Preservative = 4,
     Packaging = 5,
     Label = 6,
-    Other = 7
+    Other = 7,
+    SemiFinished = 8
 }
