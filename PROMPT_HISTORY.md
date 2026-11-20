@@ -72,6 +72,13 @@
   - `ChartOfAccountsService.cs`, `ChartOfAccounts.razor`, `JournalEntries.razor/.cs`, `FinancialReportService.cs`, `TrialBalance.razor`, `IncomeStatement.razor`, `BalanceSheet.razor`: validación de código/nombre obligatorio y modal de edición en catálogo contable; resguardo `AuthorizeView` y soporte de guardado como borrador junto a manejo de errores al anular asientos; fechas por defecto en UTC (`DateTime.UtcNow.Date`); y corrección en `FinancialReportService.GetIncomeStatementAsync` para sumar todas las cuentas de `AccountGroup.Costos` en la utilidad bruta, neta y cuadre del balance general.
 - **Verificación:** `dotnet build FactoryERP.sln --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`), `dotnet test FactoryERP.sln --configuration Release --no-build --verbosity minimal` (`102 / 102` pruebas aprobadas), `dotnet ef migrations has-pending-model-changes` sin cambios pendientes, límite SRP <= 200 líneas por archivo `.cs` propio (máximo 199 líneas) y prueba HTTP end-to-end en servidor aislado (`200 OK` en `/health`, `/login` y las 19 rutas del sistema).
 
+## [2026-11-20] — Menús Laterales Plegados al Iniciar Sesión (rama `fix/ux-refinements`)
+- **Requerimiento:** Hacer que todos los grupos del menú lateral inicien plegados al iniciar sesión en lugar de mostrarse desplegados por defecto.
+- **Solución:**
+  - `src/FactoryERP.Web/Components/Layout/NavMenu.razor`: inicializado `_expandedGroups` vacío (`new()`), capturada la variable local `groupKey` en el bucle y añadido `aria-expanded` en los botones `.nav-group-toggle`.
+  - `src/FactoryERP.Web/wwwroot/app.css`: añadido cursor puntero, borde redondeado y estado hover suave en `.nav-group-toggle`.
+- **Verificación:** `dotnet build FactoryERP.sln --configuration Release /warnaserror` (`0 Warning(s), 0 Error(s)`) y `dotnet test FactoryERP.sln --configuration Release --no-build --verbosity minimal` (`102 / 102` pruebas aprobadas).
+
 
 
 
